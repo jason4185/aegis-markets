@@ -1,16 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Frontend
 node_modules/
 dist/
 build/
 coverage/
+.vite/
+*.tsbuildinfo
+
+# Environment
 .env
 .env.*
 !.env.example
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
+
+# Editors and OS
 .vscode/
 .idea/
 .DS_Store
-*.log
 
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+bun-debug.log*
