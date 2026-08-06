@@ -55,7 +55,7 @@ through:
 The fallback is not treated as an independent third source. Required source
 dates must exactly equal the requested date. A missing, malformed, or
 unavailable required source causes an external/transient error and no market
-settlement is stored, so a permissionless caller can retry. A current-day 404
+settlement is stored, so an authorized caller can retry. A current-day 404
 is transient because that day's value may be published later; an older missing
 date remains an external failure.
 
@@ -73,10 +73,11 @@ accepted.
 
 The purchase reference is fixed at purchase. The first eligible settlement is
 the next UTC calendar date. The last is purchase calendar day plus the selected
-duration, giving exactly 7, 14, or 30 complete eligible dates. Expiry is 00:00
-UTC immediately after the last eligible date: `(last_settlement_day + 1) ×
-86,400`. Weekends are eligible. Historical settlement may occur later, but must
-use the originally requested eligible date.
+duration, giving exactly 7, 14, or 30 complete eligible dates. `expires_at` is
+stored as `(last_settlement_day + 1) × 86,400` for informational metadata only.
+The final required `NOT_BREACHED` result expires the protection immediately;
+there is no manual expiry method. Weekends are eligible. Historical settlement
+may occur later, but must use the originally requested eligible date.
 
 A settlement date may equal the current transaction calendar date; only future
 dates are rejected. Both sources must already return the exact requested date,
@@ -90,8 +91,8 @@ For DOWN markets, each price at or below the trigger is breached. For UP
 markets, each price at or above the trigger is breached.
 
 - both breached: `BREACHED` and policy becomes `CLAIMABLE`;
-- both not breached: `NOT_BREACHED`;
-- split: `INCONCLUSIVE`;
+- both not breached: `NOT_BREACHED`, with the final required date expiring immediately;
+- split: `INCONCLUSIVE`, remaining active until retry;
 - unavailable/malformed required evidence: retryable failure before storage.
 
 Prices are not averaged and no tolerance affects payout. Validator consensus

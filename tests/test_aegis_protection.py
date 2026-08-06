@@ -174,6 +174,9 @@ def deploy():
     contract.owner_premiums_paid = TreeMap()
     contract.owner_claimable_payouts = TreeMap()
     contract.owner_payouts_received = TreeMap()
+    contract.settlement_operators = TreeMap()
+    contract.settlement_operator_addresses = TreeMap()
+    contract.settlement_operator_indexes = TreeMap()
     return contract
 
 
@@ -245,7 +248,7 @@ def mock_settlement(
     )
 
 
-def fund(contract, amount=30 * GEN, sender=BOB):
+def fund(contract, amount=30 * GEN, sender=OWNER):
     set_context(sender, amount)
     contract.add_pool_funds()
 
@@ -364,7 +367,7 @@ def test_contract_contains_no_dynamic_array_storage_and_is_under_limit():
     source = CONTRACT_PATH.read_text()
     forbidden = "Dyn" + "Array"
     assert forbidden not in source
-    assert CONTRACT_PATH.stat().st_size < 50_000
+    assert CONTRACT_PATH.stat().st_size < 52_000
 
 
 def test_schema_extraction_and_abi_method_names():
@@ -374,7 +377,7 @@ def test_schema_extraction_and_abi_method_names():
     )
     schema = json.loads(completed.stdout)["schema"]
     methods = schema["methods"]
-    assert len(methods) == 30
+    assert len(methods) == 36
     assert methods["purchase_protection"]["payable"] is True
     assert methods["purchase_protection"]["params"][2][0] == "event_percent"
     assert methods["quote_protection"]["params"][1][0] == "event_percent"
@@ -382,6 +385,14 @@ def test_schema_extraction_and_abi_method_names():
     assert methods["get_protection"]["readonly"] is True
     assert "claim_payout" in methods
     assert "settle_protection" in methods
+    assert "finalize_expired_protection" not in methods
+    for name in (
+        "add_settlement_operator", "remove_settlement_operator",
+        "is_settlement_operator", "get_settlement_operator_count",
+        "get_settlement_operator_at", "get_settlement_operators",
+        "can_settle_protection",
+    ):
+        assert name in methods
     assert "create_market_observation" not in methods
     assert "process_protection" not in methods
     assert "get_market_settlement" in methods
@@ -395,8 +406,9 @@ def test_schema_extraction_and_abi_method_names():
     writes = {name for name, item in methods.items() if not item["readonly"]}
     assert writes == {
         "add_pool_funds", "withdraw_unreserved_gen", "purchase_protection",
-        "settle_protection", "finalize_expired_protection", "claim_payout",
-        "pause_purchases", "unpause_purchases",
+        "settle_protection", "claim_payout", "pause_purchases",
+        "unpause_purchases", "add_settlement_operator",
+        "remove_settlement_operator",
     }
     assert "withdraw_unreserved_gen" in methods
     assert "withdraw_unreserved" not in methods

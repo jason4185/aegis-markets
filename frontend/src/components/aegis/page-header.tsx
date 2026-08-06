@@ -12,7 +12,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="border-b border-border bg-card/60">
+    <div className="scroll-mt-20 border-b border-border bg-card/60">
       <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">

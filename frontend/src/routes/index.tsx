@@ -1,23 +1,38 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Calendar, Coins, Landmark, LockKeyhole, ScrollText, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Calendar,
+  Coins,
+  Landmark,
+  LockKeyhole,
+  ScrollText,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SUPPORTED_MARKETS, PROTOCOL_STATS } from "@/lib/aegis/mock-data";
-import { formatPrice } from "@/lib/aegis/format";
+import { useQuery } from "@tanstack/react-query";
+import { getProductTerms, getProtocolStats, getSupportedMarkets } from "@/lib/aegis/contract-reads";
+import { aegisKeys } from "@/lib/aegis/query-keys";
+import { MARKET_PRESENTATION } from "@/lib/aegis/presentation";
+import { formatGen } from "@/lib/aegis/format";
+import { publicReadErrorMessage } from "@/lib/aegis/errors";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Aegis Markets — Fixed-Payout Cover for FX and Metals" },
+      { title: "Aegis Markets — Fixed-Payout Protection for FX and Metals" },
       {
         name: "description",
         content:
           "Buy fixed-payout protection against adverse moves in GBP/USD, USD/JPY, USD/TRY, gold and silver. Daily settlement by GenLayer validator consensus.",
       },
-      { property: "og:title", content: "Aegis Markets — Fixed-Payout Cover for FX and Metals" },
+      {
+        property: "og:title",
+        content: "Aegis Markets — Fixed-Payout Protection for FX and Metals",
+      },
       {
         property: "og:description",
         content:
-          "Fixed terms, locked reference price, two independent settlement sources, permissionless daily settlement.",
+          "Fixed terms, locked reference price, two independent settlement sources, authorized daily settlement.",
       },
     ],
   }),
@@ -32,6 +47,23 @@ const PROOF = [
 ];
 
 function Landing() {
+  const markets = useQuery({
+    queryKey: aegisKeys.markets,
+    queryFn: getSupportedMarkets,
+    staleTime: 5 * 60_000,
+  });
+  const terms = useQuery({
+    queryKey: aegisKeys.terms,
+    queryFn: getProductTerms,
+    staleTime: 5 * 60_000,
+  });
+  const stats = useQuery({ queryKey: aegisKeys.stats, queryFn: getProtocolStats });
+  const featuredMarket = markets.data?.find((item) => item.market_id === "XAU_USD");
+  const featuredTerm = terms.data?.find(
+    (item) => item.duration_days === 14 && item.event_percent === 3,
+  );
+  const readError = markets.error ?? terms.error ?? stats.error;
+
   return (
     <>
       {/* Hero */}
@@ -39,49 +71,79 @@ function Landing() {
         <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 md:py-28">
           <div className="grid gap-14 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
             <div>
-              <p className="eyebrow">Onchain protection · Currencies &amp; metals</p>
+              <p className="eyebrow">Protection · Currencies &amp; metals</p>
               <h1 className="display mt-5 text-[2.75rem] leading-[1.02] sm:text-6xl md:text-[4.25rem]">
-                Protection with a
-                <span className="block italic text-primary">payout you know</span>
+                Protection with a<span className="block italic text-primary">payout you know</span>
                 before you buy.
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                Aegis covers a defined adverse move in five markets. Choose the threshold and the
-                duration; the contract sets the premium and a fixed payout that never changes.
+                Choose a currency or metals market, a movement threshold and a protection period.
+                The contract sets the premium and fixed payout before you confirm the purchase.
               </p>
               <div className="mt-9 flex flex-wrap gap-3">
                 <Button asChild size="lg">
-                  <Link to="/protection/new">
+                  <Link
+                    to="/protection/new"
+                    search={{ market: undefined, threshold: undefined, duration: undefined }}
+                  >
                     Get Protection <ArrowRight className="size-4" />
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline">
-                  <Link to="/transparency">How It Works</Link>
+                  <Link to="/how-it-works">How It Works</Link>
                 </Button>
               </div>
             </div>
 
             <div className="surface-card p-6 sm:p-7">
               <div className="flex items-center justify-between">
-                <p className="eyebrow">Sample terms</p>
+                <p className="eyebrow">Live contract terms</p>
                 <span className="rounded-full border border-brass/45 bg-brass/15 px-2.5 py-1 text-[0.68rem] font-medium uppercase tracking-[0.1em] text-brass-foreground">
                   Fixed payout
                 </span>
               </div>
-              <p className="display mt-4 text-3xl">XAU/USD</p>
+              <p className="display mt-4 text-3xl">{featuredMarket?.symbol ?? "Loading…"}</p>
               <p className="text-sm text-muted-foreground">
-                Protected against a downward move in gold
+                {featuredMarket
+                  ? MARKET_PRESENTATION[featuredMarket.market_id].protectedAgainst
+                  : "Reading the deployed AegisProtection contract"}
               </p>
               <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
-                <Cell label="Threshold" value="3%" />
-                <Cell label="Duration" value="14 days" />
-                <Cell label="Premium" value="$204" />
-                <Cell label="Fixed payout" value="$1,163" accent />
+                <Cell
+                  label="Protected direction"
+                  value={
+                    featuredMarket
+                      ? featuredMarket.direction === "DOWN"
+                        ? "Downward"
+                        : "Upward"
+                      : "—"
+                  }
+                />
+                <Cell
+                  label="Movement threshold"
+                  value={featuredTerm ? `${featuredTerm.event_percent}%` : "—"}
+                />
+                <Cell
+                  label="Protection period"
+                  value={featuredTerm ? `${featuredTerm.duration_days} days` : "—"}
+                />
+                <Cell
+                  label="Premium"
+                  value={featuredTerm ? formatGen(featuredTerm.premium) : "—"}
+                />
+                <Cell
+                  label="Fixed payout"
+                  value={featuredTerm ? formatGen(featuredTerm.payout) : "—"}
+                  accent
+                />
+                <Cell label="Reference price" value="Locked during purchase" />
               </dl>
               <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
-                Reference price is fetched and locked during purchase. Settlement runs once per day
-                for every day of cover.
+                Each eligible date can be settled once using two independent market-data sources.
               </p>
+              {readError ? (
+                <p className="mt-3 text-sm text-destructive">{publicReadErrorMessage(readError)}</p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -104,7 +166,9 @@ function Landing() {
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-xl">
             <p className="eyebrow">Supported markets</p>
-            <h2 className="display mt-3 text-3xl md:text-4xl">Five markets. Fixed terms on each.</h2>
+            <h2 className="display mt-3 text-3xl md:text-4xl">
+              Five markets. Fixed terms on each.
+            </h2>
           </div>
           <Button asChild variant="ghost">
             <Link to="/markets">
@@ -114,70 +178,62 @@ function Landing() {
         </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SUPPORTED_MARKETS.map((m) => (
+          {(markets.data ?? []).map((m) => (
             <Link
-              key={m.symbol}
+              key={m.market_id}
               to="/protection/new"
-              search={{ market: m.symbol }}
+              search={{ market: m.market_id, threshold: undefined, duration: undefined }}
               className="surface-card group flex flex-col p-6 transition-shadow hover:shadow-[var(--shadow-lift)]"
             >
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  {m.category === "Metal" ? (
+                  {m.category === "METAL" ? (
                     <Coins className="size-3.5 text-brass" />
                   ) : (
                     <Landmark className="size-3.5 text-primary" />
                   )}
-                  {m.category}
+                  {m.category === "METAL" ? "Metal" : "Currency"}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {m.direction === "DOWN" ? "Downward" : "Upward"}
                 </span>
               </div>
               <p className="display mt-4 text-2xl">{m.symbol}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{m.protectedAgainst}</p>
-              <p className="numeric mt-6 text-sm text-foreground">
-                {formatPrice(m.referencePrice, m.symbol)}
-                <span className="ml-2 font-sans text-xs text-muted-foreground">{m.unit}</span>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {MARKET_PRESENTATION[m.market_id].protectedAgainst}
               </p>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* How it works */}
+      {/* How it works preview */}
       <section className="border-y border-border bg-card/60">
         <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 md:py-24">
           <p className="eyebrow">How it works</p>
-          <h2 className="display mt-3 max-w-2xl text-3xl md:text-4xl">
-            Four steps, no negotiation, no discretion.
-          </h2>
-          <ol className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-4">
+          <h2 className="display mt-3 max-w-2xl text-3xl md:text-4xl">How Aegis Markets works</h2>
+          <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
+            Choose fixed terms, lock a reference price, settle each eligible date and claim if both
+            sources confirm the trigger.
+          </p>
+          <ol className="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
             {[
-              {
-                t: "Choose your cover",
-                d: "Pick a market, a movement threshold of 2%, 3% or 4%, and a duration of 7, 14 or 30 days.",
-              },
-              {
-                t: "Terms are locked",
-                d: "The contract sets the premium and the fixed payout, and locks the reference price at purchase.",
-              },
-              {
-                t: "Daily settlement",
-                d: "Each day of cover is settled using two independent sources and validator consensus.",
-              },
-              {
-                t: "Claim if breached",
-                d: "If the protected move happens, the protection becomes claimable by its owner for the full fixed payout.",
-              },
-            ].map((s, i) => (
-              <li key={s.t} className="bg-card p-6">
+              "Choose protection",
+              "Confirm fixed terms",
+              "Settle eligible dates",
+              "Claim after a confirmed breach",
+            ].map((step, i) => (
+              <li key={step} className="bg-card p-6">
                 <span className="numeric text-xs text-brass">0{i + 1}</span>
-                <h3 className="mt-3 text-lg font-medium">{s.t}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.d}</p>
+                <h3 className="mt-3 text-lg font-medium">{step}</h3>
               </li>
             ))}
           </ol>
+          <Button asChild className="mt-8" variant="outline">
+            <Link to="/how-it-works">
+              See how it works <ArrowRight className="size-4" />
+            </Link>
+          </Button>
         </div>
       </section>
 
@@ -187,25 +243,30 @@ function Landing() {
           <div>
             <p className="eyebrow">Settlement transparency</p>
             <h2 className="display mt-3 text-3xl md:text-4xl">
-              Nobody — including us — can choose the outcome.
+              The settlement caller cannot choose the outcome.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-              Settlement is permissionless: any wallet may trigger the daily check. The caller never
-              supplies the price and never influences the result. Two independent sources are read,
-              validators reach consensus, and the day is recorded as not breached, breached or
-              inconclusive.
+              Any wallet can trigger settlement for an eligible date. Each source price is compared
+              separately with the stored trigger price. Both prices must confirm the trigger for the
+              protection to become claimable. A split result is inconclusive and can be tried again.
             </p>
             <Button asChild className="mt-8" variant="outline">
-              <Link to="/transparency">
+              <Link to="/how-it-works">
                 Read the full explanation <ArrowRight className="size-4" />
               </Link>
             </Button>
           </div>
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
-            <Stat label="Protections issued" value={PROTOCOL_STATS.totalProtections.toLocaleString()} />
-            <Stat label="Daily settlements" value={PROTOCOL_STATS.settlementsRun.toLocaleString()} />
-            <Stat label="Validator nodes" value={String(PROTOCOL_STATS.validatorNodes)} />
-            <Stat label="Markets covered" value={String(PROTOCOL_STATS.markets)} />
+            <Stat label="Markets supported" value={String(markets.data?.length ?? "—")} />
+            <Stat label="Settlement sources" value="2" />
+            <Stat
+              label="Protections purchased"
+              value={stats.data?.total_protections.toString() ?? "—"}
+            />
+            <Stat
+              label="Available liquidity"
+              value={stats.data ? formatGen(stats.data.available_liquidity) : "—"}
+            />
           </dl>
         </div>
       </section>
@@ -217,11 +278,14 @@ function Landing() {
             Know your payout before the market moves.
           </h2>
           <p className="mx-auto mt-5 max-w-lg text-base text-ink-foreground/70">
-            Set up protection in under a minute. Fixed premium, fixed payout, daily settlement.
+            Choose the terms, review the fixed premium and payout, then confirm the purchase.
           </p>
           <div className="mt-9 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg" variant="secondary">
-              <Link to="/protection/new">
+              <Link
+                to="/protection/new"
+                search={{ market: undefined, threshold: undefined, duration: undefined }}
+              >
                 Get Protection <ArrowRight className="size-4" />
               </Link>
             </Button>

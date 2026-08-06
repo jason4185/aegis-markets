@@ -1,140 +1,231 @@
-import { useEffect, useState } from "react";
-import { Check, Loader2, ShieldCheck } from "lucide-react";
+import { Check, CircleAlert, ExternalLink, Loader2 } from "lucide-react";
+import { LogoMark } from "./logo-mark";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { TransactionProgress, TransactionStage } from "@/lib/aegis/types";
 
-export type TxStepId = "preparing" | "wallet" | "consensus" | "confirming" | "completed";
-
-const STEPS: { id: TxStepId; label: string; hint: string; ms: number }[] = [
-  { id: "preparing", label: "Preparing", hint: "Building the protection transaction", ms: 1100 },
-  { id: "wallet", label: "Awaiting Wallet", hint: "Approve the request in your wallet", ms: 1500 },
+const STEPS: { id: TransactionStage; label: string; hint: string }[] = [
   {
-    id: "consensus",
-    label: "Validator Consensus",
-    hint: "Independent validators are agreeing on the locked reference price. This step can take a little longer.",
-    ms: 2600,
+    id: "preparing",
+    label: "Preparing",
+    hint: "Checking the wallet, network and contract request.",
   },
-  { id: "confirming", label: "Confirming", hint: "Writing the protection onchain", ms: 1400 },
-  { id: "completed", label: "Completed", hint: "Your protection is active", ms: 0 },
+  {
+    id: "awaiting_wallet",
+    label: "Awaiting wallet",
+    hint: "Review and approve the transaction in your wallet.",
+  },
+  { id: "submitted", label: "Submitted", hint: "The transaction was submitted to GenLayer." },
+  {
+    id: "validator_consensus",
+    label: "Validator consensus",
+    hint: "GenLayer validators are evaluating the transaction.",
+  },
+  {
+    id: "completed",
+    label: "Completed",
+    hint: "The transaction was accepted by GenLayer.",
+  },
 ];
+
+const ORDER: TransactionStage[] = STEPS.map((step) => step.id);
 
 export function TransactionProgressModal({
   open,
   onOpenChange,
-  title = "Purchasing protection",
-  onCompleted,
-  completedHref,
+  progress,
+  title,
+  checking = false,
+  onCheckAgain,
 }: {
   open: boolean;
-  onOpenChange: (v: boolean) => void;
-  title?: string;
-  onCompleted?: () => void;
-  completedHref?: () => void;
+  onOpenChange: (value: boolean) => void;
+  progress: TransactionProgress;
+  title: string;
+  checking?: boolean | undefined;
+  onCheckAgain?: (() => void) | undefined;
 }) {
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    if (!open) {
-      setIndex(0);
-      return;
-    }
-    if (index >= STEPS.length - 1) {
-      onCompleted?.();
-      return;
-    }
-    const t = setTimeout(() => setIndex((i) => i + 1), STEPS[index]?.ms ?? 1200);
-    return () => clearTimeout(t);
-  }, [open, index, onCompleted]);
-
-  const done = index >= STEPS.length - 1;
+  const failed = progress.stage === "failed";
+  const done = progress.stage === "completed";
+  const currentIndex = failed
+    ? Math.max(
+        0,
+        ORDER.findIndex((stage) => stage === "submitted"),
+      )
+    : Math.max(0, ORDER.indexOf(progress.stage));
+  const canClose = Boolean(progress.hash) || done || failed;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (done) onOpenChange(v);
-      }}
-    >
-      <DialogContent
-        className={cn("sm:max-w-md", !done && "[&>button:last-child]:hidden")}
-        onEscapeKeyDown={(e) => !done && e.preventDefault()}
-        onInteractOutside={(e) => !done && e.preventDefault()}
-      >
-        <DialogTitle className="sr-only">{title}</DialogTitle>
-        <div className="flex flex-col items-center pt-2 text-center">
-          <div
-            className={cn(
-              "flex size-14 items-center justify-center rounded-2xl transition-colors",
-              done ? "bg-success/12 text-success" : "bg-primary/8 text-primary",
-            )}
-          >
-            {done ? <ShieldCheck className="size-7" /> : <Loader2 className="size-6 animate-spin" />}
+    <>
+      {!open && progress.hash && !done && !failed ? (
+        <Button
+          type="button"
+          size="sm"
+          className="fixed bottom-4 right-4 z-50 shadow-lg"
+          onClick={() => onOpenChange(true)}
+        >
+          <Loader2 className="size-4 animate-spin" /> Transaction pending
+        </Button>
+      ) : null}
+      <Dialog open={open} onOpenChange={(value) => canClose && onOpenChange(value)}>
+        <DialogContent
+          className={cn("sm:max-w-md", !canClose && "[&>button:last-child]:hidden")}
+          onEscapeKeyDown={(event) => !canClose && event.preventDefault()}
+          onInteractOutside={(event) => !canClose && event.preventDefault()}
+        >
+          <DialogTitle className="sr-only">{title}</DialogTitle>
+          <div className="flex flex-col items-center pt-2 text-center">
+            <div
+              className={cn(
+                "flex size-14 items-center justify-center rounded-2xl",
+                done
+                  ? "bg-success/12 text-success"
+                  : failed
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-primary/8 text-primary",
+              )}
+            >
+              {done ? (
+                <LogoMark className="size-8" />
+              ) : failed ? (
+                <CircleAlert className="size-6" />
+              ) : (
+                <Loader2 className="size-6 animate-spin" />
+              )}
+            </div>
+            <h2 className="display mt-4 text-2xl">
+              {done ? "Completed" : failed ? "Transaction failed" : title}
+            </h2>
+            <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
+              {failed
+                ? progress.error
+                : progress.error
+                  ? progress.error
+                  : canClose && !done
+                    ? "You can close this window and return to the pending transaction from the indicator."
+                    : done
+                      ? completionMessage(progress.method)
+                      : "Keep this window open until the transaction is submitted."}
+            </p>
           </div>
-          <h2 className="display mt-4 text-2xl">{done ? "Protection is live" : title}</h2>
-          <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
-            {done
-              ? "Daily settlement begins tomorrow and runs for every day of cover."
-              : "Keep this window open until all steps complete."}
-          </p>
-        </div>
 
-        <ol className="mt-6 space-y-1">
-          {STEPS.map((step, i) => {
-            const state = i < index ? "done" : i === index ? "current" : "todo";
-            return (
-              <li
-                key={step.id}
-                className={cn(
-                  "flex gap-3 rounded-lg px-3 py-3 transition-colors",
-                  state === "current" && "bg-secondary",
-                )}
-              >
-                <span
+          <ol className="mt-6 space-y-1">
+            {STEPS.map((step, index) => {
+              const state =
+                done && index <= currentIndex
+                  ? "done"
+                  : index < currentIndex
+                    ? "done"
+                    : index === currentIndex
+                      ? "current"
+                      : "todo";
+              return (
+                <li
+                  key={step.id}
                   className={cn(
-                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.6rem]",
-                    state === "done" && "border-success bg-success text-success-foreground",
-                    state === "current" && "border-primary text-primary",
-                    state === "todo" && "border-border text-muted-foreground",
+                    "flex gap-3 rounded-lg px-3 py-3",
+                    state === "current" && "bg-secondary",
                   )}
                 >
-                  {state === "done" ? (
-                    <Check className="size-3" />
-                  ) : state === "current" ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-                <span className="min-w-0">
                   <span
                     className={cn(
-                      "block text-sm font-medium",
-                      state === "todo" ? "text-muted-foreground" : "text-foreground",
+                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.6rem]",
+                      state === "done" && "border-success bg-success text-success-foreground",
+                      state === "current" && !failed && "border-primary text-primary",
+                      state === "current" && failed && "border-destructive text-destructive",
+                      state === "todo" && "border-border text-muted-foreground",
                     )}
                   >
-                    {step.label}
+                    {state === "done" ? (
+                      <Check className="size-3" />
+                    ) : state === "current" && !failed ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      index + 1
+                    )}
                   </span>
-                  {state === "current" && (
-                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-                      {step.hint}
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        "block text-sm font-medium",
+                        state === "todo" && "text-muted-foreground",
+                      )}
+                    >
+                      {step.label}
                     </span>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+                    {state === "current" && !failed ? (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {step.hint}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
 
-        {done && (
-          <div className="mt-4 flex flex-col gap-2">
-            <Button onClick={() => completedHref?.()}>View in dashboard</Button>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          {progress.hash ? (
+            <div className="rounded-lg border border-border bg-secondary/40 p-3 text-xs">
+              <p className="numeric break-all">{progress.hash}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                <span>{progress.method}</span>
+                <span>{progress.status}</span>
+              </div>
+              {progress.explorerUrl ? (
+                <a
+                  className="mt-2 inline-flex items-center gap-1 text-primary hover:underline"
+                  href={progress.explorerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View in explorer <ExternalLink className="size-3" />
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
+          {canClose ? (
+            <div className="flex gap-2">
+              {!done && !failed && progress.error && onCheckAgain ? (
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  disabled={checking}
+                  onClick={onCheckAgain}
+                >
+                  {checking ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Check again
+                </Button>
+              ) : null}
+              <Button
+                className="flex-1"
+                variant={done ? "default" : "ghost"}
+                onClick={() => onOpenChange(false)}
+              >
+                Close
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
+}
+
+function completionMessage(method?: string) {
+  const accepted = "The transaction was accepted by GenLayer.";
+  if (method === "purchase_protection") {
+    return `Your protection has been created successfully. ${accepted}`;
+  }
+  if (method === "settle_protection") {
+    return `The settlement transaction was accepted successfully. ${accepted}`;
+  }
+  if (method === "claim_payout") {
+    return `Your payout claim was accepted successfully. ${accepted}`;
+  }
+  if (method === "add_settlement_operator" || method === "remove_settlement_operator") {
+    return `The operator update was accepted successfully. ${accepted}`;
+  }
+  return accepted;
 }

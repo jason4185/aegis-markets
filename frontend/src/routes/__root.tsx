@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -14,6 +14,8 @@ import { SiteHeader } from "@/components/aegis/site-header";
 import { SiteFooter } from "@/components/aegis/site-footer";
 import { Toaster } from "@/components/ui/sonner";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Web3Providers } from "@/lib/web3/providers";
+import { TransactionProvider } from "@/lib/aegis/transaction-context";
 
 function NotFoundComponent() {
   return (
@@ -84,25 +86,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Fixed-payout protection for currencies and metals, settled daily by validator consensus.",
+          "Fixed-payout protection for selected currency and metals markets, verified through GenLayer consensus.",
       },
       { name: "author", content: "Aegis Markets" },
       { property: "og:title", content: "Aegis Markets" },
       {
         property: "og:description",
         content:
-          "Fixed-payout protection for currencies and metals, settled daily by validator consensus.",
+          "Fixed-payout protection for selected currency and metals markets, verified through GenLayer consensus.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/brand/favicon.svg", type: "image/svg+xml" },
+      { rel: "mask-icon", href: "/brand/aegis-mark.svg", color: "#184f56" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -135,16 +137,18 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <div className="flex min-h-screen flex-col">
-        <SiteHeader />
-        <main className="flex-1">
-          <Outlet />
-        </main>
-        <SiteFooter />
-      </div>
-      <Toaster />
-    </QueryClientProvider>
+    <Web3Providers queryClient={queryClient}>
+      <TransactionProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <div className="flex min-h-screen flex-col">
+          <SiteHeader />
+          <main className="flex-1">
+            <Outlet />
+          </main>
+          <SiteFooter />
+        </div>
+        <Toaster />
+      </TransactionProvider>
+    </Web3Providers>
   );
 }

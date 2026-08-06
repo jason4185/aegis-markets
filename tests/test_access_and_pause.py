@@ -53,7 +53,7 @@ def test_settlement_remains_available_while_paused():
     set_context(OWNER)
     contract.pause_purchases()
     mock_settlement("2026-06-02")
-    set_context(BOB, 0, "2026-06-03T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-03T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
 
 
@@ -82,7 +82,7 @@ def test_settlement_allows_today_and_rejects_future_date():
     fund(contract)
     protection_id = purchase(contract)
     mock_settlement("2026-06-02")
-    set_context(BOB, 0, "2026-06-02T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-02T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
     assert_error(
         C.E_INVALID_DATE,

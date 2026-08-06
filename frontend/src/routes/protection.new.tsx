@@ -1,24 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Coins, Info, Landmark, Lock, TrendingDown, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/aegis/page-header";
 import { ReviewModal } from "@/components/aegis/review-modal";
-import { TransactionProgressModal } from "@/components/aegis/tx-progress-modal";
+import { WalletControl } from "@/components/aegis/wallet-control";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { contractService } from "@/lib/aegis/contract-service";
-import { SUPPORTED_MARKETS } from "@/lib/aegis/mock-data";
-import { formatDate, formatPrice, formatUsd } from "@/lib/aegis/format";
-import type { Duration, MarketSymbol, Threshold } from "@/lib/aegis/types";
+import {
+  getAvailableLiquidity,
+  getProductTerms,
+  getPurchasesPaused,
+  getSupportedMarkets,
+  quoteProtection,
+} from "@/lib/aegis/contract-reads";
+import { purchaseProtection } from "@/lib/aegis/contract-writes";
+import { publicReadErrorMessage } from "@/lib/aegis/errors";
+import { formatGen } from "@/lib/aegis/format";
+import { MARKET_PRESENTATION, directionLabel } from "@/lib/aegis/presentation";
+import { aegisKeys } from "@/lib/aegis/query-keys";
+import { useTransactionManager } from "@/lib/aegis/transaction-context";
+import type { Duration, MarketId, ProtectionQuote, Threshold } from "@/lib/aegis/types";
+import { useWalletState } from "@/hooks/use-wallet-state";
 import { cn } from "@/lib/utils";
 
-const SYMBOLS = SUPPORTED_MARKETS.map((m) => m.symbol);
+const MARKET_IDS: MarketId[] = ["GBP_USD", "USD_JPY", "USD_TRY", "XAU_USD", "XAG_USD"];
+const THRESHOLDS: Threshold[] = [2, 3, 4];
+const DURATIONS: Duration[] = [7, 14, 30];
 
 export const Route = createFileRoute("/protection/new")({
   validateSearch: (search: Record<string, unknown>) => ({
-    market: SYMBOLS.includes(search["market"] as MarketSymbol)
-      ? (search["market"] as MarketSymbol)
+    market: MARKET_IDS.includes(search["market"] as MarketId)
+      ? (search["market"] as MarketId)
+      : undefined,
+    threshold: THRESHOLDS.includes(Number(search["threshold"]) as Threshold)
+      ? (Number(search["threshold"]) as Threshold)
+      : undefined,
+    duration: DURATIONS.includes(Number(search["duration"]) as Duration)
+      ? (Number(search["duration"]) as Duration)
       : undefined,
   }),
   head: () => ({
@@ -26,13 +45,7 @@ export const Route = createFileRoute("/protection/new")({
       { title: "Get Protection — Aegis Markets" },
       {
         name: "description",
-        content:
-          "Configure fixed-payout protection: choose a market, a movement threshold and a duration. Premium and payout are set by the contract.",
-      },
-      { property: "og:title", content: "Get Protection — Aegis Markets" },
-      {
-        property: "og:description",
-        content: "Choose market, threshold and duration. See premium and fixed payout instantly.",
+        content: "Configure fixed-payout protection using the live AegisProtection contract terms.",
       },
     ],
   }),
@@ -40,195 +53,262 @@ export const Route = createFileRoute("/protection/new")({
 });
 
 function NewProtection() {
-  const { market } = Route.useSearch();
+  const search = Route.useSearch();
   const navigate = useNavigate();
-
-  const [symbol, setSymbol] = useState<MarketSymbol>(market ?? "GBP/USD");
-  const [threshold, setThreshold] = useState<Threshold>(3);
-  const [duration, setDuration] = useState<Duration>(14);
+  const queryClient = useQueryClient();
+  const wallet = useWalletState();
+  const transaction = useTransactionManager();
+  const [marketId, setMarketId] = useState<MarketId>(search.market ?? "GBP_USD");
+  const [threshold, setThreshold] = useState<Threshold>(search.threshold ?? 3);
+  const [duration, setDuration] = useState<Duration>(search.duration ?? 14);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [txOpen, setTxOpen] = useState(false);
 
   useEffect(() => {
-    if (market) setSymbol(market);
-  }, [market]);
+    if (search.market) setMarketId(search.market);
+    if (search.threshold) setThreshold(search.threshold);
+    if (search.duration) setDuration(search.duration);
+  }, [search.duration, search.market, search.threshold]);
 
-  const selected = useMemo(() => SUPPORTED_MARKETS.find((m) => m.symbol === symbol)!, [symbol]);
-
-  const { data: quote, isFetching } = useQuery({
-    queryKey: ["quote", symbol, threshold, duration],
-    queryFn: () => contractService.quote_protection({ symbol, threshold, duration }),
+  const markets = useQuery({
+    queryKey: aegisKeys.markets,
+    queryFn: getSupportedMarkets,
+    staleTime: 5 * 60_000,
   });
+  const terms = useQuery({
+    queryKey: aegisKeys.terms,
+    queryFn: getProductTerms,
+    staleTime: 5 * 60_000,
+  });
+  const quote = useQuery({
+    queryKey: aegisKeys.quote(duration, threshold),
+    queryFn: () => quoteProtection(duration, threshold),
+  });
+  const paused = useQuery({ queryKey: aegisKeys.paused, queryFn: getPurchasesPaused });
+  const liquidity = useQuery({ queryKey: aegisKeys.liquidity, queryFn: getAvailableLiquidity });
+  const selectedMarket = markets.data?.find((market) => market.market_id === marketId);
+  const selectedTerm = terms.data?.find(
+    (term) => term.duration_days === duration && term.event_percent === threshold,
+  );
+
+  const protectionQuote = useMemo<ProtectionQuote | null>(() => {
+    if (!selectedMarket || !quote.data || !selectedTerm) return null;
+    return {
+      market_id: selectedMarket.market_id,
+      symbol: selectedMarket.symbol,
+      direction: selectedMarket.direction,
+      duration_days: duration,
+      event_percent: threshold,
+      event_bps: selectedTerm.event_bps,
+      premium: quote.data.premium,
+      payout: quote.data.payout,
+    };
+  }, [duration, quote.data, selectedMarket, selectedTerm, threshold]);
+
+  const insufficientLiquidity = Boolean(
+    protectionQuote &&
+    liquidity.data !== undefined &&
+    liquidity.data + protectionQuote.premium < protectionQuote.payout,
+  );
+  const readError = markets.error ?? terms.error ?? quote.error ?? paused.error ?? liquidity.error;
+  const canConfirm = Boolean(
+    wallet.isConnected &&
+    !wallet.isWrongNetwork &&
+    protectionQuote &&
+    !paused.data &&
+    !insufficientLiquidity,
+  );
+  const confirmMessage = !wallet.isConnected
+    ? "Connect your wallet to confirm this purchase."
+    : wallet.isWrongNetwork
+      ? "Switch your wallet to GenLayer Bradbury."
+      : paused.data
+        ? "New protection purchases are temporarily paused."
+        : insufficientLiquidity
+          ? "The protocol does not currently have enough available liquidity for this payout."
+          : undefined;
+
+  async function submitPurchase() {
+    if (!protectionQuote || !canConfirm) return;
+    setReviewOpen(false);
+    transaction.begin("Purchasing protection");
+    try {
+      const result = await purchaseProtection({
+        context: wallet.getWriteContext(),
+        marketId: protectionQuote.market_id,
+        durationDays: protectionQuote.duration_days,
+        eventPercent: protectionQuote.event_percent,
+        quotedPremium: protectionQuote.premium,
+        onProgress: transaction.onProgress,
+        queryClient,
+      });
+      await navigate({ to: "/protection/$id", params: { id: result.protectionId.toString() } });
+    } catch (error) {
+      transaction.fail(error);
+    }
+  }
 
   return (
     <>
       <PageHeader
         eyebrow="New protection"
         title="Configure your protection"
-        description="Direction is set by the market you choose. Premium and fixed payout come straight from the contract."
+        description="Direction, premium and fixed payout are read from the deployed AegisProtection contract."
       />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+        {readError ? (
+          <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            {publicReadErrorMessage(readError)}
+          </div>
+        ) : null}
+        {paused.data ? (
+          <div className="mb-6 rounded-lg border border-brass/40 bg-brass/10 p-4 text-sm">
+            New protection purchases are temporarily paused.
+          </div>
+        ) : null}
+
         <div className="grid gap-8 lg:grid-cols-[1.35fr_0.9fr] lg:items-start">
-          {/* Left: configuration */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             <section className="surface-card p-6 sm:p-7">
               <SectionTitle step="01" title="Select market" />
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {SUPPORTED_MARKETS.map((m) => {
-                  const active = m.symbol === symbol;
-                  return (
-                    <button
-                      key={m.symbol}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => {
-                        setSymbol(m.symbol);
-                        navigate({ to: ".", search: { market: m.symbol } });
-                      }}
-                      className={cn(
-                        "flex items-start justify-between gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                        active
-                          ? "border-primary bg-primary/5"
-                          : "border-border bg-card hover:bg-secondary",
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 text-[0.68rem] uppercase tracking-[0.12em] text-muted-foreground">
-                          {m.category === "Metal" ? (
-                            <Coins className="size-3" />
-                          ) : (
-                            <Landmark className="size-3" />
-                          )}
-                          {m.category}
+              {markets.isLoading ? (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {Array.from({ length: 4 }, (_, index) => (
+                    <Skeleton key={index} className="h-24" />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {(markets.data ?? []).map((market) => {
+                    const active = market.market_id === marketId;
+                    return (
+                      <button
+                        key={market.market_id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setMarketId(market.market_id)}
+                        className={cn(
+                          "rounded-lg border p-4 text-left transition-colors",
+                          active
+                            ? "border-primary bg-primary/6"
+                            : "border-border hover:bg-secondary",
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                            {market.category === "METAL" ? (
+                              <Coins className="size-3.5 text-brass" />
+                            ) : (
+                              <Landmark className="size-3.5 text-primary" />
+                            )}
+                            {market.category === "METAL" ? "Metal" : "Currency"}
+                          </span>
+                          {active ? <Check className="size-4 text-primary" /> : null}
                         </span>
-                        <span className="mt-1.5 block text-base font-medium">{m.symbol}</span>
-                        <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                          {m.direction === "DOWN" ? (
-                            <TrendingDown className="size-3" />
-                          ) : (
-                            <TrendingUp className="size-3" />
-                          )}
-                          {m.direction === "DOWN" ? "Downward move" : "Upward move"}
+                        <span className="display mt-2 block text-xl">{market.symbol}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {MARKET_PRESENTATION[market.market_id].protectedAgainst}
                         </span>
-                      </span>
-                      {active && (
-                        <span className="mt-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <Check className="size-3" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-                <Info className="mt-0.5 size-3.5 shrink-0" />
-                The protected direction is fixed per market — {selected.protectedAgainst.toLowerCase()}.
-              </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
             <section className="surface-card p-6 sm:p-7">
-              <SectionTitle step="02" title="Movement threshold" />
-              <p className="mt-2 text-sm text-muted-foreground">
-                How far the market must move against you before the protection pays.
-              </p>
+              <SectionTitle step="02" title="Choose movement threshold" />
               <div className="mt-5 grid grid-cols-3 gap-3">
-                {selected.thresholds.map((t) => (
-                  <OptionTile
-                    key={t}
-                    active={t === threshold}
-                    onClick={() => setThreshold(t)}
-                    label={`${t}%`}
-                    sub={t === 2 ? "Most sensitive" : t === 3 ? "Balanced" : "Lowest premium"}
-                  />
+                {THRESHOLDS.map((value) => (
+                  <Choice
+                    key={value}
+                    active={threshold === value}
+                    onClick={() => setThreshold(value)}
+                  >
+                    {value}%
+                  </Choice>
                 ))}
               </div>
             </section>
 
             <section className="surface-card p-6 sm:p-7">
-              <SectionTitle step="03" title="Duration" />
-              <p className="mt-2 text-sm text-muted-foreground">
-                Cover runs for every day in the period and is settled daily.
-              </p>
+              <SectionTitle step="03" title="Choose protection period" />
               <div className="mt-5 grid grid-cols-3 gap-3">
-                {selected.durations.map((d) => (
-                  <OptionTile
-                    key={d}
-                    active={d === duration}
-                    onClick={() => setDuration(d)}
-                    label={`${d} days`}
-                    sub={`${d} settlements`}
-                  />
+                {DURATIONS.map((value) => (
+                  <Choice
+                    key={value}
+                    active={duration === value}
+                    onClick={() => setDuration(value)}
+                  >
+                    {value} days
+                  </Choice>
                 ))}
               </div>
             </section>
           </div>
 
-          {/* Right: sticky overview */}
-          <aside className="lg:sticky lg:top-24">
-            <div className="surface-card overflow-hidden">
-              <div className="ink-panel px-6 py-5">
-                <p className="text-[0.62rem] uppercase tracking-[0.18em] text-ink-foreground/60">
-                  Live overview
-                </p>
-                <p className="display mt-2 text-2xl text-ink-foreground">{selected.symbol}</p>
-                <p className="text-sm text-ink-foreground/65">
-                  {selected.direction === "DOWN" ? "Downward move" : "Upward move"} ·{" "}
-                  {selected.category}
-                </p>
-              </div>
-
-              <dl className="divide-y divide-border px-6">
-                <Row label="Movement threshold" value={`${threshold}%`} />
-                <Row label="Duration" value={`${duration} days`} />
-                <Row
-                  label="Premium"
-                  loading={isFetching}
-                  value={quote ? formatUsd(quote.premium) : "—"}
-                />
-                <Row
-                  label="Fixed payout"
-                  loading={isFetching}
-                  emphasis
-                  value={quote ? formatUsd(quote.fixedPayout) : "—"}
-                />
-                <Row
-                  label="Trigger price"
-                  loading={isFetching}
-                  value={quote ? formatPrice(quote.triggerPrice, symbol) : "—"}
-                />
-                <Row
-                  label="Expected coverage"
-                  loading={isFetching}
-                  mono={false}
-                  value={
-                    quote ? `${formatDate(quote.coverageStart)} → ${formatDate(quote.coverageEnd)}` : "—"
-                  }
-                />
-                <div className="flex items-start justify-between gap-4 py-3.5">
-                  <dt className="text-sm text-muted-foreground">Reference price</dt>
-                  <dd className="inline-flex items-center gap-1.5 text-sm font-medium">
-                    <Lock className="size-3.5 text-brass" />
-                    Locked during purchase
-                  </dd>
+          <aside className="surface-card p-6 sm:p-7 lg:sticky lg:top-24">
+            <p className="eyebrow">Live quote</p>
+            {selectedMarket && protectionQuote ? (
+              <>
+                <div className="mt-4 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="display text-3xl">{selectedMarket.symbol}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {directionLabel(selectedMarket.direction)}
+                    </p>
+                  </div>
+                  {selectedMarket.direction === "DOWN" ? (
+                    <TrendingDown className="size-5 text-destructive" />
+                  ) : (
+                    <TrendingUp className="size-5 text-info" />
+                  )}
                 </div>
-              </dl>
-
-              <div className="border-t border-border p-6">
-                <Button
-                  className="w-full"
-                  size="lg"
-                  disabled={!quote || isFetching}
-                  onClick={() => setReviewOpen(true)}
-                >
-                  Review Protection
+                <dl className="mt-6 divide-y divide-border rounded-lg border border-border px-4">
+                  <QuoteRow label="Threshold" value={`${threshold}%`} />
+                  <QuoteRow label="Protection period" value={`${duration} days`} />
+                  <QuoteRow label="Premium" value={formatGen(protectionQuote.premium)} />
+                  <QuoteRow label="Fixed payout" value={formatGen(protectionQuote.payout)} accent />
+                  <QuoteRow label="Reference price" value="Locked during purchase" />
+                  <QuoteRow label="Trigger price" value="Calculated after purchase" />
+                  <QuoteRow
+                    label="Available liquidity"
+                    value={liquidity.data === undefined ? "—" : formatGen(liquidity.data)}
+                  />
+                </dl>
+                {insufficientLiquidity ? (
+                  <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    The protocol does not currently have enough available liquidity for this payout.
+                  </p>
+                ) : null}
+                <div className="mt-5 flex items-start gap-2 rounded-lg bg-secondary/60 p-3 text-xs leading-relaxed text-muted-foreground">
+                  <Info className="mt-0.5 size-3.5 shrink-0" />
+                  The premium is sent as native GEN. No token approval is required.
+                </div>
+                <Button className="mt-5 w-full" size="lg" onClick={() => setReviewOpen(true)}>
+                  <Lock className="size-4" /> Review protection
                 </Button>
-                <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
-                  Terms are final once purchased. Settlement uses two independent sources and
-                  validator consensus.
-                </p>
+                {!wallet.isConnected ? (
+                  <div className="mt-3 flex justify-center">
+                    <WalletControl />
+                  </div>
+                ) : null}
+                {wallet.isWrongNetwork ? (
+                  <Button
+                    className="mt-3 w-full"
+                    variant="outline"
+                    onClick={() => void wallet.switchToBradbury()}
+                  >
+                    Switch to Bradbury
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <div className="mt-5 space-y-3">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-64" />
               </div>
-            </div>
+            )}
           </aside>
         </div>
       </div>
@@ -236,19 +316,11 @@ function NewProtection() {
       <ReviewModal
         open={reviewOpen}
         onOpenChange={setReviewOpen}
-        quote={quote ?? null}
-        onConfirm={() => {
-          setReviewOpen(false);
-          setTxOpen(true);
-        }}
-      />
-      <TransactionProgressModal
-        open={txOpen}
-        onOpenChange={setTxOpen}
-        completedHref={() => {
-          setTxOpen(false);
-          navigate({ to: "/dashboard" });
-        }}
+        quote={protectionQuote}
+        walletAddress={wallet.address}
+        canConfirm={canConfirm}
+        confirmMessage={confirmMessage}
+        onConfirm={() => void submitPurchase()}
       />
     </>
   );
@@ -263,16 +335,14 @@ function SectionTitle({ step, title }: { step: string; title: string }) {
   );
 }
 
-function OptionTile({
+function Choice({
   active,
-  label,
-  sub,
   onClick,
+  children,
 }: {
   active: boolean;
-  label: string;
-  sub: string;
   onClick: () => void;
+  children: React.ReactNode;
 }) {
   return (
     <button
@@ -280,40 +350,21 @@ function OptionTile({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "rounded-lg border px-3 py-4 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-        active ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-secondary",
+        "rounded-lg border px-3 py-3 text-sm font-medium",
+        active ? "border-primary bg-primary/6 text-primary" : "border-border hover:bg-secondary",
       )}
     >
-      <span className="numeric block text-lg">{label}</span>
-      <span className="mt-1 block text-[0.7rem] text-muted-foreground">{sub}</span>
+      {children}
     </button>
   );
 }
 
-function Row({
-  label,
-  value,
-  loading,
-  emphasis,
-  mono = true,
-}: {
-  label: string;
-  value: string;
-  loading?: boolean;
-  emphasis?: boolean;
-  mono?: boolean;
-}) {
+function QuoteRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          "text-right text-sm font-medium",
-          mono && "numeric",
-          emphasis && "text-brass-foreground",
-        )}
-      >
-        {loading ? <Skeleton className="h-4 w-24" /> : value}
+    <div className="flex items-center justify-between gap-4 py-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn("numeric text-right text-sm", accent && "text-brass-foreground")}>
+        {value}
       </dd>
     </div>
   );

@@ -4,9 +4,9 @@ from tests.test_aegis_protection import (
 )
 
 
-def test_permissionless_pool_funding():
+def test_owner_only_pool_funding():
     contract = deploy()
-    fund(contract, 12 * GEN, BOB)
+    fund(contract, 12 * GEN, OWNER)
     assert contract.get_pool_state() == {
         "pool_balance": 12 * GEN,
         "reserved_liability": 0,
@@ -16,8 +16,15 @@ def test_permissionless_pool_funding():
 
 def test_zero_pool_funding_rejected():
     contract = deploy()
-    set_context(BOB, 0)
+    set_context(OWNER, 0)
     assert_error(C.E_ZERO_AMOUNT, contract.add_pool_funds)
+
+
+def test_non_owner_cannot_fund_pool():
+    contract = deploy()
+    set_context(BOB, GEN)
+    assert_error(C.E_UNAUTHORIZED, contract.add_pool_funds)
+    assert contract.get_pool_state()["pool_balance"] == 0
 
 
 def test_purchase_premium_enters_pool_and_payout_is_reserved():

@@ -32,27 +32,13 @@ def test_complete_daily_period_bounds_for_all_durations(duration, purchase_time)
     assert item["expires_at"] == (purchase_day + duration + 1) * C.DAY_SECONDS
 
 
-def test_no_expiry_at_purchase_timestamp_plus_duration():
+def test_expires_at_remains_informational_metadata():
     contract = deploy()
     fund(contract)
     protection_id = purchase(contract)
     item = contract.get_protection(protection_id)
-    old_expiry = item["purchased_at"] + 7 * C.DAY_SECONDS
-    set_context(BOB, 0, "2026-06-08T12:00:00Z")
-    assert C._transaction_time() == old_expiry
-    assert_error(C.E_TOO_EARLY, lambda: contract.finalize_expired_protection(protection_id))
-    assert contract.get_pool_state()["reserved_liability"] == 2 * GEN
-
-
-def test_expiry_begins_only_after_final_calendar_date_is_complete():
-    contract = deploy()
-    fund(contract)
-    protection_id = purchase(contract)
-    set_context(BOB, 0, "2026-06-08T23:59:59Z")
-    assert_error(C.E_TOO_EARLY, lambda: contract.finalize_expired_protection(protection_id))
-    assert contract.get_pool_state()["reserved_liability"] == 2 * GEN
-    set_context(BOB, 0, "2026-06-09T00:00:00Z")
-    assert_error(C.E_INCOMPLETE, lambda: contract.finalize_expired_protection(protection_id))
+    assert item["expires_at"] == (item["last_settlement_day"] + 1) * C.DAY_SECONDS
+    assert not hasattr(contract, "finalize_expired_protection")
     assert contract.get_pool_state()["reserved_liability"] == 2 * GEN
 
 
@@ -65,7 +51,7 @@ def make_claimable():
         fx_rates={"GBP": "0.82", "JPY": "150", "TRY": "32", "XAU": "0.0005", "XAG": "0.04"},
         fawaz_rates={"gbp": "0.82", "jpy": "150", "try": "32", "xau": "0.0005", "xag": "0.04"},
     )
-    set_context(BOB, 0, "2026-06-03T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-03T12:00:00Z")
     contract.settle_protection(protection_id, "2026-06-02")
     return contract, protection_id
 
@@ -116,7 +102,7 @@ def _process_all_expiry_dates(inconclusive_date=""):
         "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05",
         "2026-06-06", "2026-06-07", "2026-06-08",
     )
-    set_context(BOB, 0, "2026-06-10T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-10T12:00:00Z")
     for date in dates:
         fx_gbp = "0.82" if date == inconclusive_date else "0.8"
         mock_settlement(
@@ -136,11 +122,12 @@ def _complete_before_expiry():
         "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05",
         "2026-06-06", "2026-06-07", "2026-06-08",
     )
-    set_context(BOB, 0, "2026-06-08T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-08T12:00:00Z")
     for date in dates:
         mock_settlement(date)
         assert contract.settle_protection(protection_id, date) == "NOT_BREACHED"
-    assert contract.get_protection(protection_id)["status"] == "ACTIVE"
+    assert C._transaction_time() < contract.get_protection(protection_id)["expires_at"]
+    assert contract.get_protection(protection_id)["status"] == "EXPIRED"
     return contract, protection_id
 
 
@@ -157,52 +144,17 @@ def test_repeated_final_not_breached_auto_expires_once_without_refetch():
     contract, protection_id = _complete_before_expiry()
     before = contract.get_protocol_stats()
     owner_before = contract.get_my_dashboard_summary(C.Address(ALICE))
-    assert before["active_protections"] == 1 and before["expired_protections"] == 0
-    assert owner_before["active_count"] == 1 and owner_before["expired_count"] == 0
+    assert before["active_protections"] == 0 and before["expired_protections"] == 1
+    assert owner_before["active_count"] == 0 and owner_before["expired_count"] == 1
 
     gl.nondet.web.clear()
-    set_context(BOB, 0, "2026-06-08T23:59:59Z")
+    set_context(ALICE, 0, "2026-06-08T23:59:59Z")
     assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
-    assert contract.get_protection(protection_id)["status"] == "ACTIVE"
+    assert contract.get_protection(protection_id)["status"] == "EXPIRED"
     assert contract.get_protocol_stats() == before
     assert gl.nondet.web.requests == []
-
-    set_context(BOB, 0, "2026-06-09T00:00:00Z")
-    assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
-    item = contract.get_protection(protection_id)
-    stats = contract.get_protocol_stats()
-    summary = contract.get_my_dashboard_summary(C.Address(ALICE))
-    assert item["status"] == "EXPIRED" and item["reserve_released"] is True
+    assert contract.get_my_dashboard_summary(C.Address(ALICE)) == owner_before
     assert contract.get_pool_state()["reserved_liability"] == 0
-    assert stats["active_protections"] == 0 and stats["expired_protections"] == 1
-    assert summary["active_count"] == 0 and summary["expired_count"] == 1
-    assert gl.nondet.web.requests == []
-
-    assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
-    assert contract.get_protocol_stats() == stats
-    assert contract.get_my_dashboard_summary(C.Address(ALICE)) == summary
-    assert contract.get_pool_state()["reserved_liability"] == 0
-    assert gl.nondet.web.requests == []
-
-
-def test_manual_expiry_fallback_still_works_and_cannot_release_twice():
-    contract, protection_id = _complete_before_expiry()
-    set_context(BOB, 0, "2026-06-09T00:00:00Z")
-    contract.finalize_expired_protection(protection_id)
-    assert contract.get_protection(protection_id)["status"] == "EXPIRED"
-    assert contract.get_protocol_stats()["expired_protections"] == 1
-    assert_error(C.E_RESERVE_RELEASED, lambda: contract.finalize_expired_protection(protection_id))
-
-
-def test_invalid_or_out_of_window_date_cannot_trigger_automatic_expiry():
-    contract, protection_id = _complete_before_expiry()
-    set_context(BOB, 0, "2026-06-09T12:00:00Z")
-    assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-01"))
-    assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-09"))
-    assert contract.get_protection(protection_id)["status"] == "ACTIVE"
-    assert contract.get_pool_state()["reserved_liability"] == 2 * GEN
-    assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
-    assert contract.get_protection(protection_id)["status"] == "EXPIRED"
 
 
 def test_inconclusive_date_does_not_expire_policy_prematurely():
@@ -214,10 +166,9 @@ def test_inconclusive_date_does_not_expire_policy_prematurely():
         fx_rates={"GBP": "0.82", "JPY": "150", "TRY": "32", "XAU": "0.0005", "XAG": "0.04"},
         fawaz_rates={"gbp": "0.8", "jpy": "150", "try": "32", "xau": "0.0005", "xag": "0.04"},
     )
-    set_context(BOB, 0, "2026-06-10T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-10T12:00:00Z")
     contract.settle_protection(protection_id, "2026-06-02")
     assert contract.get_protection(protection_id)["status"] == "ACTIVE"
-    assert_error(C.E_INCOMPLETE, lambda: contract.finalize_expired_protection(protection_id))
 
 
 def test_inconclusive_date_never_counts_toward_expiry():
@@ -228,14 +179,13 @@ def test_inconclusive_date_never_counts_toward_expiry():
     assert item["inconclusive_dates"] == 1
     assert item["reserve_released"] is False
     assert contract.get_pool_state()["reserved_liability"] == 2 * GEN
-    assert_error(C.E_INCOMPLETE, lambda: contract.finalize_expired_protection(protection_id))
 
 
 def test_resolving_the_last_inconclusive_date_allows_expiry():
     contract, protection_id = _process_all_expiry_dates("2026-06-02")
     C.gl.nondet.web.clear()
     mock_settlement("2026-06-02")
-    set_context(BOB, 0, "2026-06-11T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-11T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
     item = contract.get_protection(protection_id)
     assert item["status"] == "EXPIRED"
@@ -246,26 +196,16 @@ def test_resolving_the_last_inconclusive_date_allows_expiry():
 
 def test_double_reserve_release_rejected():
     contract, protection_id = _process_all_expiry_dates()
-    assert_error(
-        C.E_RESERVE_RELEASED,
-        lambda: contract.finalize_expired_protection(protection_id),
-    )
-
-
-def test_cannot_finalize_before_expiry_or_before_all_dates():
-    contract = deploy()
-    fund(contract)
-    protection_id = purchase(contract)
-    set_context(BOB, 0, "2026-06-02T12:00:00Z")
-    assert_error(C.E_TOO_EARLY, lambda: contract.finalize_expired_protection(protection_id))
-    set_context(BOB, 0, "2026-06-10T12:00:00Z")
-    assert_error(C.E_INCOMPLETE, lambda: contract.finalize_expired_protection(protection_id))
+    before = contract.get_pool_state()
+    set_context(ALICE, 0, "2026-06-12T12:00:00Z")
+    assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
+    assert contract.get_pool_state() == before
 
 
 def test_finalized_policy_cannot_settle_later_date():
     contract, protection_id = make_claimable()
     mock_settlement("2026-06-03")
-    set_context(BOB, 0, "2026-06-04T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-04T12:00:00Z")
     assert_error(
         C.E_NOT_ACTIVE,
         lambda: contract.settle_protection(protection_id, "2026-06-03"),
@@ -318,7 +258,8 @@ def test_expiry_updates_dashboard_counters_exactly_once():
     assert stats["expired_protections"] == 1
     summary = contract.get_my_dashboard_summary(C.Address(ALICE))
     assert summary["active_count"] == 0 and summary["expired_count"] == 1
-    assert_error(C.E_RESERVE_RELEASED, lambda: contract.finalize_expired_protection(protection_id))
+    set_context(ALICE, 0, "2026-06-12T12:00:00Z")
+    assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
     assert contract.get_protocol_stats()["expired_protections"] == 1
 
 

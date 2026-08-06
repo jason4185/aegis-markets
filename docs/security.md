@@ -2,11 +2,11 @@
 
 ## Access control and pause
 
-The deployer is the owner. Only the owner may pause/unpause purchases or call
-`withdraw_unreserved_gen`. That method accepts whole GEN, checks conversion to
-native units for overflow, and cannot withdraw reserved liquidity. Funding and
-`settle_protection` are permissionless. Only the stored protection owner may
-claim its payout.
+The deployer is the owner. Only the owner may fund the pool, pause/unpause
+purchases, withdraw unreserved GEN, and manage at most five settlement
+operators. The owner and approved operators may settle every protection; the
+stored protection owner may settle only that protection. Unrelated wallets
+cannot settle. Only the stored protection owner may claim its payout.
 
 Pause is intentionally purchase-only. It does not block settlement,
 expiration, claims, or pool reads.
@@ -35,8 +35,9 @@ transient failures. Unknown validator failures cause disagreement/rotation.
 
 The contract checks pool liability never exceeds pool balance. A policy stores
 `claimed` and `reserve_released` guards. Claim state and pool accounting change
-before the finalized native transfer is emitted. Expiry releases a reserve once
-only. A claimable, claimed, or expired protection cannot settle later dates.
+before the finalized native transfer is emitted. The final required
+`NOT_BREACHED` settlement expires immediately and releases a reserve once only.
+A claimable, claimed, or expired protection cannot settle later dates.
 Repeated conclusive settlement of the same protection/date is idempotent and
 does not refetch sources or increment counters again.
 
@@ -47,11 +48,12 @@ pull-based.
 ## Known operational behavior
 
 Expiration requires all eligible protection dates to have a conclusive
-`NOT_BREACHED` result. This prevents a caller from expiring protection while an
+`NOT_BREACHED` result and does not wait for informational `expires_at`. This
+prevents a caller from expiring protection while an
 unresolved eligible date might contain a breach. If a required dated dataset remains
 permanently unavailable, the policy remains active and reserved because the
-contract has no administrative oracle or override. This is deliberate: adding
-an admin settlement path would violate permissionless source-based settlement.
+contract has no administrative oracle or outcome override. Authorized callers
+still cannot choose prices or outcomes.
 
 Native claims and withdrawals use GenLayer finalized `emit_transfer`. The
 contract does not implement arbitrary callback execution or synchronous payout

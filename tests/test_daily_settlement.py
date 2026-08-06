@@ -12,7 +12,7 @@ ALL_LOWER = {key.lower(): value for key, value in ALL_RATES.items()}
 
 def settle(contract, protection_id, date="2026-06-02", now="2026-06-03T12:00:00Z", **mocks):
     mock_settlement(date, **mocks)
-    set_context(BOB, 0, now)
+    set_context(ALICE, 0, now)
     return contract.settle_protection(protection_id, date)
 
 
@@ -22,7 +22,7 @@ def policy():
     return contract, purchase(contract)
 
 
-def test_one_call_creates_market_settlement_and_processes_permissionlessly():
+def test_protection_owner_creates_market_settlement_and_processes_result():
     contract, protection_id = policy()
     result = settle(
         contract, protection_id,
@@ -115,7 +115,7 @@ def _settle_with_fx_body(contract, protection_id, raw_date, fx_body, fawaz_body)
     C.gl.nondet.web.mock(r"fxratesapi\.com/historical\?date=2026-06-02", 200, fx_body)
     C.gl.nondet.web.mock(r"currency-api@2026-06-02/v1/currencies/usd\.min\.json", 200, fawaz_body)
     C.gl.nondet.web.mock(r"2026-06-02\.currency-api\.pages\.dev", 200, fawaz_body)
-    set_context(BOB, 0, "2026-06-03T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-03T12:00:00Z")
     return contract.settle_protection(protection_id, date) == "NOT_BREACHED"
 
 
@@ -214,7 +214,7 @@ def test_repeated_conclusive_result_is_idempotent_and_does_not_refetch():
     assert settle(contract, protection_id) == "NOT_BREACHED"
     request_count = len(C.gl.nondet.web.requests)
     C.gl.nondet.web.clear()
-    set_context(BOB, 0, "2026-06-04T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-04T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
     assert C.gl.nondet.web.requests == []
     assert request_count > 0
@@ -228,7 +228,7 @@ def test_repeated_breached_is_idempotent_and_does_not_refetch():
     assert settle(contract, protection_id, fx_rates=breached, fawaz_rates=lower) == "BREACHED"
     stats = contract.get_protocol_stats()
     C.gl.nondet.web.clear()
-    set_context(BOB, 0, "2026-06-04T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-04T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "BREACHED"
     assert contract.get_protocol_stats() == stats
     assert C.gl.nondet.web.requests == []
@@ -284,12 +284,12 @@ def test_market_settlement_reused_by_multiple_protections_without_refetch():
 
 def test_purchase_day_future_day_and_window_bounds():
     contract, protection_id = policy()
-    set_context(BOB, 0, "2026-06-02T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-02T12:00:00Z")
     assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-01"))
     assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-03"))
     mock_settlement("2026-06-02")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
-    set_context(BOB, 0, "2026-06-20T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-20T12:00:00Z")
     assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-09"))
 
 

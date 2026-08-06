@@ -34,7 +34,8 @@ primitive fields, compact storage dataclasses, and `TreeMap` indexes:
 - per-owner counts and `owner|index` keys for bounded pagination;
 - versioned market settlements keyed by market and date;
 - protection/date outcomes keyed by `protection_id|YYYY-MM-DD`;
-- the exact market-settlement version used by each protection/date outcome.
+- the exact market-settlement version used by each protection/date outcome;
+- a five-entry settlement-operator index with authorization and reverse maps.
 
 Raw response bodies are never stored. A protection stores only ownership,
 terms, reference/trigger prices, timestamps and eligible-day bounds, status,
@@ -49,8 +50,10 @@ the exact premium, checks pool capacity, obtains the validator-confirmed latest
 FXRatesAPI reference, derives the trigger, then stores the protection and
 reserves its complete payout.
 
-`settle_protection` is permissionless and handles one protection/date pair in a
-single write. It validates the D+1 coverage window, reuses an existing finalized
+`settle_protection` handles one protection/date pair in a single write. The
+contract owner and approved operators may settle any protection; a protection
+owner may settle only their own. It validates authorization before external
+work, validates the D+1 coverage window, reuses an existing finalized
 market settlement when available, or obtains two-source consensus and stores a
 new market-settlement version. It then compares each price independently with
 the protection trigger. A confirmed breach moves the protection to
@@ -61,6 +64,10 @@ result, that protection/date result is final. New market-settlement versions
 are used only to retry results that were previously `INCONCLUSIVE`. A newer
 version updates the stored evidence version and adjusts counters only if it
 resolves the split.
+
+The final required `NOT_BREACHED` result expires an active protection and
+releases its reserve immediately. `expires_at` remains informational metadata;
+there is no manual expiry write. `INCONCLUSIVE` dates remain active until retried.
 
 Claims are pull-based and owner-only. Accounting and lifecycle flags change
 before a finalized native-token transfer is emitted. Settlement never loops

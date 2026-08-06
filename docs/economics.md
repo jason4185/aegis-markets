@@ -25,7 +25,8 @@ The maximum payout is 10 GEN.
 
 ## Shared pool
 
-Every market uses one pool. Anyone may call the payable `add_pool_funds` method.
+Every market uses one pool. Only the contract owner may call the payable
+`add_pool_funds` method.
 An exact purchase premium is added to `pool_balance`; the selected fixed payout
 is added to `reserved_liability`. A purchase succeeds only when available
 liquidity after receipt of its premium covers the new payout.
@@ -41,10 +42,10 @@ updating `pool_balance`, and sending the finalized transfer to the owner.
 
 When both sources confirm a breach, the policy remains fully reserved while it
 is `CLAIMABLE`. On claim, both pool balance and reserved liability decrease by
-the fixed payout. An untriggered policy releases its reservation only after
-expiry and after all eligible dates have a conclusive `NOT_BREACHED` result. Release
-and claim flags prevent repeated accounting changes.
+the fixed payout. An untriggered policy releases its reservation immediately
+when all eligible dates have a conclusive `NOT_BREACHED` result. Release and
+claim flags prevent repeated accounting changes.
 
-An `INCONCLUSIVE` result does not pay and cannot count toward expiry. Once
-coverage has ended and every eligible date is conclusively `NOT_BREACHED`, the
-protection expires and releases its reserve.
+An `INCONCLUSIVE` result does not pay and cannot count toward expiry. Once every
+eligible date is conclusively `NOT_BREACHED`, the protection expires and
+releases its reserve without waiting for `expires_at`.

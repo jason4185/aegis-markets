@@ -1,5 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { AegisLogo } from "./logo";
+import { LogoLockup } from "./logo-lockup";
+import { LogoMark } from "./logo-mark";
+import { aegisConfig } from "@/lib/aegis/contract-config";
+import { explorerAddressUrl } from "@/lib/web3/chains";
+import { shortenAddress } from "@/lib/web3/wallet";
 
 export function SiteFooter() {
   return (
@@ -7,15 +11,10 @@ export function SiteFooter() {
       <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <span className="inline-flex items-center gap-2.5">
-              <span className="display text-2xl text-ink-foreground">Aegis</span>
-              <span className="text-[0.62rem] font-medium uppercase tracking-[0.2em] text-ink-foreground/60">
-                Protection
-              </span>
-            </span>
+            <LogoLockup variant="reversed" markClassName="size-9" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-foreground/65">
-              Fixed-payout protection for currencies and metals, settled daily by GenLayer
-              validator consensus.
+              Fixed-payout protection for selected currency and metals markets, verified through
+              GenLayer consensus.
             </p>
           </div>
           <FooterCol
@@ -23,6 +22,7 @@ export function SiteFooter() {
             links={[
               { to: "/markets", label: "Markets" },
               { to: "/protection/new", label: "Get Protection" },
+              { to: "/how-it-works", label: "How It Works" },
               { to: "/dashboard", label: "Dashboard" },
             ]}
           />
@@ -38,17 +38,22 @@ export function SiteFooter() {
             <h4 className="text-[0.62rem] font-medium uppercase tracking-[0.18em] text-ink-foreground/50">
               Status
             </h4>
-            <p className="mt-4 flex items-center gap-2 text-sm text-ink-foreground/75">
-              <span className="size-2 rounded-full bg-brass" />
-              Validators online
-            </p>
-            <p className="mt-2 text-sm text-ink-foreground/55">Contract address: pending deploy</p>
+            <p className="mt-4 text-sm text-ink-foreground/75">Contract connection</p>
+            <p className="mt-2 text-sm text-ink-foreground/55">{aegisConfig.networkName}</p>
+            <a
+              className="mt-2 block text-sm text-ink-foreground/75 hover:text-ink-foreground"
+              href={explorerAddressUrl(aegisConfig.contractAddress)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {shortenAddress(aegisConfig.contractAddress)}
+            </a>
           </div>
         </div>
         <div className="mt-12 flex flex-col gap-3 border-t border-ink-foreground/12 pt-6 text-xs text-ink-foreground/50 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} Aegis Markets. Prototype interface.</p>
+          <p>© 2026 Aegis Markets.</p>
           <div className="hidden sm:block">
-            <AegisLogo showWordmark={false} />
+            <LogoMark variant="reversed" className="size-6" />
           </div>
         </div>
       </div>
@@ -56,13 +61,7 @@ export function SiteFooter() {
   );
 }
 
-function FooterCol({
-  title,
-  links,
-}: {
-  title: string;
-  links: { to: string; label: string }[];
-}) {
+function FooterCol({ title, links }: { title: string; links: { to: string; label: string }[] }) {
   return (
     <div>
       <h4 className="text-[0.62rem] font-medium uppercase tracking-[0.18em] text-ink-foreground/50">

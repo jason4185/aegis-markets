@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as MarketsRouteImport } from './routes/markets'
 import { Route as TransparencyRouteImport } from './routes/transparency'
 import { Route as ProtectionIdRouteImport } from './routes/protection.$id'
@@ -24,6 +25,11 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HowItWorksRoute = HowItWorksRouteImport.update({
+  id: '/how-it-works',
+  path: '/how-it-works',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketsRoute = MarketsRouteImport.update({
@@ -50,6 +56,7 @@ const ProtectionNewRoute = ProtectionNewRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/markets': typeof MarketsRoute
   '/transparency': typeof TransparencyRoute
   '/protection/$id': typeof ProtectionIdRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/markets': typeof MarketsRoute
   '/transparency': typeof TransparencyRoute
   '/protection/$id': typeof ProtectionIdRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/markets': typeof MarketsRoute
   '/transparency': typeof TransparencyRoute
   '/protection/$id': typeof ProtectionIdRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/how-it-works'
     | '/markets'
     | '/transparency'
     | '/protection/$id'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/how-it-works'
     | '/markets'
     | '/transparency'
     | '/protection/$id'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/how-it-works'
     | '/markets'
     | '/transparency'
     | '/protection/$id'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  HowItWorksRoute: typeof HowItWorksRoute
   MarketsRoute: typeof MarketsRoute
   TransparencyRoute: typeof TransparencyRoute
   ProtectionIdRoute: typeof ProtectionIdRoute
@@ -122,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/how-it-works': {
+      id: '/how-it-works'
+      path: '/how-it-works'
+      fullPath: '/how-it-works'
+      preLoaderRoute: typeof HowItWorksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/markets': {
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  HowItWorksRoute: HowItWorksRoute,
   MarketsRoute: MarketsRoute,
   TransparencyRoute: TransparencyRoute,
   ProtectionIdRoute: ProtectionIdRoute,
