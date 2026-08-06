@@ -11,6 +11,29 @@
 | Wallets          | Installed EVM-compatible browser wallets                                                                                                  |
 | Contract version | `1.0.0`                                                                                                                                   |
 
+## Live Application
+
+[Launch Aegis Markets](https://aegis-markets-phi.vercel.app/)
+
+Connect an EVM-compatible browser wallet on GenLayer Bradbury to explore supported markets,
+purchase protection, view wallet-owned protections, settle eligible dates, and claim confirmed
+payouts. Purchases still require native GEN, an available pool, and the Bradbury network.
+
+## Vision
+
+Market protection should be understandable before a user pays for it and verifiable when a
+payout decision is made.
+
+Aegis Markets was built for traders who want protection against a defined currency or
+precious-metals move without opening a leveraged position or managing liquidation risk. Each
+protection has fixed terms: a known premium, a known trigger, a fixed duration, and a predefined
+payout.
+
+The broader vision is to make externally settled financial agreements transparent enough for
+users to understand and independently verifiable enough to operate without a traditional claims
+desk. GenLayer validators confirm the market data used by the contract, while deterministic
+contract rules decide what happens to funds and protection state.
+
 ## What Aegis Does
 
 A buyer chooses one of five supported markets, a `2%`, `3%`, or `4%` movement threshold,
@@ -24,6 +47,76 @@ supposed to differ: for downward `2%` protection, the trigger is the reference p
 
 Eligible dates can then be settled against historical market data. A confirmed breach makes
 the protection claimable, and only its owner can claim the predefined payout.
+
+## Key Innovations
+
+### Fixed terms before purchase
+
+The contract defines the market, movement threshold, duration, premium, and payout before a
+purchase is submitted. Users can understand the cost, trigger conditions, and possible payout
+without supplying arbitrary terms.
+
+### Validator-confirmed purchase reference
+
+The purchase reference comes from a live market-data read through GenLayer's nondeterministic
+execution path. Validators independently fetch and check the result against bounded timestamp
+and price-tolerance rules before it affects contract state.
+
+### Dual-source daily settlement
+
+Each settlement checks FXRatesAPI historical data and Fawaz currency data. The contract compares
+both normalized results against the stored trigger; agreement confirms a qualifying move or a
+non-qualifying move, while disagreement remains inconclusive rather than forcing an outcome.
+
+### Deterministic financial state after consensus
+
+Once a result is accepted, the contract deterministically applies premium accounting, payout
+reservation, liquidity checks, lifecycle counters, reserve release, and payout transfers. External
+evidence is kept separate from the financial state mutation it authorizes.
+
+### Controlled settlement with owner participation
+
+Protection owners can settle their own eligible protections, while the contract owner and
+approved operators can settle any protection. Only the protection owner can claim a payout,
+separating the ability to keep a protection moving from the right to receive its funds.
+
+### Retryable inconclusive dates
+
+When the two settlement sources disagree, the date remains unresolved and can be retried under
+the contract's versioning rules instead of being finalized from unsupported evidence.
+
+## Technical Pillars
+
+### Consensus-gated external data
+
+Live and historical market data enters through GenLayer nondeterministic execution and
+independent validator checks. Structured results, freshness windows, price tolerances, and
+classified source failures are validated before a result can affect protection state.
+
+### Deterministic fixed-point calculations
+
+GEN amounts and normalized market prices use integer units. Triggers, premiums, payouts,
+reserves, counters, and date handling avoid floating-point arithmetic so the same accepted
+result produces the same state transition.
+
+### Reserved-liability accounting
+
+Pool balance, reserved liability, and available liquidity are tracked separately. A protection is
+created only when available liquidity plus its incoming premium covers the predefined payout;
+reserved funds are released on expiry or paid when the owner claims.
+
+### Explicit protection lifecycle
+
+The implemented lifecycle is `Active → Payout available → Paid` for a confirmed breach, or
+`Active → Ended` when all required dates complete without one. An inconclusive date stays
+unresolved until a later settlement attempt succeeds.
+
+### Wallet-scoped frontend and transparent reads
+
+The frontend connects to installed EVM-compatible browser wallets, validates the selected
+account and Bradbury chain, and reads wallet-owned protections directly from the deployed
+contract. Public wallet addresses cross the ABI boundary as full hexadecimal strings, while the
+contract retains typed `Address` values internally; there is no private application database.
 
 ## How It Works
 
