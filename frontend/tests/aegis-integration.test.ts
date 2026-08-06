@@ -31,7 +31,6 @@ import {
 } from "../src/lib/aegis/transaction-storage";
 import { normalizeAegisError } from "../src/lib/aegis/errors";
 import { AEGIS_METHODS } from "../src/lib/aegis/contract-schema";
-import { toCalldataAddress } from "../src/lib/aegis/contract-reads";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as Address;
 const OTHER = "0x2222222222222222222222222222222222222222" as Address;
@@ -59,7 +58,7 @@ describe("Bradbury configuration", () => {
     expect(BRADBURY_CHAIN_ID).toBe(4221);
     expect(BRADBURY_RPC_URL).toBe("https://rpc-bradbury.genlayer.com");
     expect(BRADBURY_EXPLORER_URL).toBe("https://explorer-bradbury.genlayer.com");
-    expect(AEGIS_PROTECTION_ADDRESS).toBe("0x884b5F5aEa2849999e5091b55d85de5f0f681597");
+    expect(AEGIS_PROTECTION_ADDRESS).toBe("0xe44E5B93baCF3da55840b452D5274e175214C19D");
     expect(AEGIS_OWNER_ADDRESS).toBe("0xC8Ba5DA455b011863F2ECa76a6fa21E62Cc91B87");
     expect(aegisConfig.networkName).toBe("GenLayer Bradbury");
   });
@@ -79,9 +78,16 @@ describe("Bradbury configuration", () => {
     );
   });
 
-  it("encodes address parameters as GenLayer address calldata", () => {
-    const encoded = toCalldataAddress(ACCOUNT);
-    expect(encoded.bytes).toHaveLength(20);
+  it("passes public address parameters as complete strings", async () => {
+    const reads = await source("../src/lib/aegis/contract-reads.ts");
+    const writes = await source("../src/lib/aegis/contract-writes.ts");
+    expect(reads).not.toContain("CalldataAddress");
+    expect(reads).not.toContain("toCalldataAddress");
+    expect(reads).toContain("[account]");
+    expect(reads).toContain("[operator]");
+    expect(reads).toContain("[caller, protectionId]");
+    expect(writes).not.toContain("toCalldataAddress");
+    expect(writes).toContain("args: [operator]");
   });
 
   it("configures an injected connector only", async () => {
@@ -97,9 +103,12 @@ describe("Bradbury configuration", () => {
   it("contains the production address and no previous deployment address", async () => {
     const config = await source("../src/lib/aegis/contract-config.ts");
     const env = await source("../.env.example");
-    const previous = ["0xFaE663775383e8346", "Be99492248A467dD812b86a"].join("");
+    const previous = [
+      ["0x884b5F5aEa2849999e5091b55d85de5f0f", "681597"].join(""),
+      ["0xFaE663775383e8346Be99492248A467dD", "812b86a"].join(""),
+    ];
     expect(`${config}\n${env}`).toContain(AEGIS_PROTECTION_ADDRESS);
-    expect(`${config}\n${env}`).not.toContain(previous);
+    for (const address of previous) expect(`${config}\n${env}`).not.toContain(address);
   });
 
   it("matches the deployed operator schema and omits manual expiry", () => {

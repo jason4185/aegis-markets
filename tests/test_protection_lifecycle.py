@@ -143,7 +143,7 @@ def test_expiry_releases_reserved_liability_once():
 def test_repeated_final_not_breached_auto_expires_once_without_refetch():
     contract, protection_id = _complete_before_expiry()
     before = contract.get_protocol_stats()
-    owner_before = contract.get_my_dashboard_summary(C.Address(ALICE))
+    owner_before = contract.get_my_dashboard_summary(ALICE)
     assert before["active_protections"] == 0 and before["expired_protections"] == 1
     assert owner_before["active_count"] == 0 and owner_before["expired_count"] == 1
 
@@ -153,7 +153,7 @@ def test_repeated_final_not_breached_auto_expires_once_without_refetch():
     assert contract.get_protection(protection_id)["status"] == "EXPIRED"
     assert contract.get_protocol_stats() == before
     assert gl.nondet.web.requests == []
-    assert contract.get_my_dashboard_summary(C.Address(ALICE)) == owner_before
+    assert contract.get_my_dashboard_summary(ALICE) == owner_before
     assert contract.get_pool_state()["reserved_liability"] == 0
 
 
@@ -233,7 +233,7 @@ def test_protocol_and_owner_dashboard_counters_follow_claim_lifecycle():
     assert stats["active_protections"] == 0
     assert stats["claimable_protections"] == 1
     assert stats["total_premiums_collected"] == GEN
-    summary = contract.get_my_dashboard_summary(C.Address(ALICE))
+    summary = contract.get_my_dashboard_summary(ALICE)
     assert summary["total_protections"] == 1
     assert summary["active_count"] == 0
     assert summary["claimable_count"] == 1
@@ -245,7 +245,7 @@ def test_protocol_and_owner_dashboard_counters_follow_claim_lifecycle():
     assert stats["claimable_protections"] == 0
     assert stats["claimed_protections"] == 1
     assert stats["total_payouts_paid"] == 2 * GEN
-    summary = contract.get_my_dashboard_summary(C.Address(ALICE))
+    summary = contract.get_my_dashboard_summary(ALICE)
     assert summary["claimed_count"] == 1
     assert summary["total_claimable_payout"] == 0
     assert summary["total_payouts_received"] == 2 * GEN
@@ -256,7 +256,7 @@ def test_expiry_updates_dashboard_counters_exactly_once():
     stats = contract.get_protocol_stats()
     assert stats["active_protections"] == 0
     assert stats["expired_protections"] == 1
-    summary = contract.get_my_dashboard_summary(C.Address(ALICE))
+    summary = contract.get_my_dashboard_summary(ALICE)
     assert summary["active_count"] == 0 and summary["expired_count"] == 1
     set_context(ALICE, 0, "2026-06-12T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
@@ -268,15 +268,15 @@ def test_frontend_protection_cards_and_pagination():
     fund(contract)
     first = purchase(contract, buyer=ALICE)
     second = purchase(contract, market="XAU_USD", event=3, buyer=ALICE)
-    cards = contract.get_my_protections(C.Address(ALICE), 0, 2)
+    cards = contract.get_my_protections(ALICE, 0, 2)
     assert [card["id"] for card in cards] == [first, second]
     assert cards[0]["symbol"] == "GBP/USD"
     assert cards[0]["direction"] == "DOWN"
     assert cards[1]["symbol"] == "XAU/USD"
     assert cards[1]["category"] == "METAL"
     assert cards[1]["event_percent"] == 3
-    assert_error(C.E_BAD_PAGE, lambda: contract.get_my_protections(C.Address(ALICE), 0, 0))
-    assert_error(C.E_BAD_PAGE, lambda: contract.get_my_protections(C.Address(ALICE), 0, C.MAX_PAGE_SIZE + 1))
+    assert_error(C.E_BAD_PAGE, lambda: contract.get_my_protections(ALICE, 0, 0))
+    assert_error(C.E_BAD_PAGE, lambda: contract.get_my_protections(ALICE, 0, C.MAX_PAGE_SIZE + 1))
 
 
 def test_protection_details_readiness_and_history_are_deterministic_reads():

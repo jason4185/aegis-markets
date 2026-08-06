@@ -50,6 +50,7 @@ E_OPERATOR_MISSING = EXPECTED + 'SETTLEMENT_OPERATOR_NOT_FOUND'
 E_OPERATOR_LIMIT = EXPECTED + 'SETTLEMENT_OPERATOR_LIMIT_REACHED'
 E_INVALID_OPERATOR = EXPECTED + 'INVALID_SETTLEMENT_OPERATOR'
 E_INVALID_OPERATOR_INDEX = EXPECTED + 'INVALID_SETTLEMENT_OPERATOR_INDEX'
+E_INVALID_ADDRESS = EXPECTED + 'INVALID_ADDRESS'
 X_MALFORMED = EXTERNAL + 'MALFORMED_SOURCE_RESPONSE'
 X_MISSING_RATE = EXTERNAL + 'MISSING_SOURCE_RATE'
 X_BAD_TIMESTAMP = EXTERNAL + 'INVALID_SOURCE_TIMESTAMP'
@@ -98,6 +99,20 @@ class MarketSettlement:
 
 def _user_error(code):
     raise gl.vm.UserError(code)
+
+def _address(value: str, reject_zero: bool = True) -> Address:
+    if not isinstance(value, str) or len(value) != 42 or not value.startswith('0x'):
+        _user_error(E_INVALID_ADDRESS)
+        return Address('0x' + '00' * 20)
+    try:
+        int(value[2:], 16)
+        result = Address(value)
+    except Exception:
+        _user_error(E_INVALID_ADDRESS)
+        return Address('0x' + '00' * 20)
+    if reject_zero and int(result.as_hex, 16) == 0:
+        _user_error(E_INVALID_ADDRESS)
+    return result
 
 def _market(market_id):
     if market_id == 'GBP_USD':
@@ -654,7 +669,8 @@ class AegisProtection(gl.Contract):
         return {'pool_balance': int(self.pool_balance), 'reserved_liability': int(self.reserved_liability), 'available_liquidity': self._available(), 'total_protections': int(self.protection_count), 'active_protections': int(self.active_protections), 'claimable_protections': int(self.claimable_protections), 'expired_protections': int(self.expired_protections), 'claimed_protections': int(self.claimed_protections), 'total_premiums_collected': int(self.total_premiums_collected), 'total_payouts_paid': int(self.total_payouts_paid), 'purchases_paused': self.paused}
 
     @gl.public.view
-    def get_my_dashboard_summary(self, account: Address) -> dict:
+    def get_my_dashboard_summary(self, account_hex: str) -> dict:
+        account = _address(account_hex)
         return {'account': account.as_hex, 'total_protections': int(self.owner_counts.get(account, u256(0))), 'active_count': int(self.owner_active_counts.get(account, u256(0))), 'claimable_count': int(self.owner_claimable_counts.get(account, u256(0))), 'expired_count': int(self.owner_expired_counts.get(account, u256(0))), 'claimed_count': int(self.owner_claimed_counts.get(account, u256(0))), 'total_premiums_paid': int(self.owner_premiums_paid.get(account, u256(0))), 'total_claimable_payout': int(self.owner_claimable_payouts.get(account, u256(0))), 'total_payouts_received': int(self.owner_payouts_received.get(account, u256(0)))}
 
     @gl.public.view
@@ -667,11 +683,11 @@ class AegisProtection(gl.Contract):
         return self.protection_count
 
     @gl.public.view
-    def get_owned_protection_count(self, account: Address) -> u256:
+    def get_owned_protection_count(self, account_hex: str) -> u256:
+        account = _address(account_hex)
         return self.owner_counts.get(account, u256(0))
 
-    @gl.public.view
-    def get_owned_protection_ids(self, account: Address, start: u256, limit: u16) -> list[u256]:
+    def _owned_protection_ids(self, account: Address, start: u256, limit: u16) -> list[u256]:
         count = int(self.owner_counts.get(account, u256(0)))
         first = int(start)
         size = int(limit)
@@ -685,9 +701,14 @@ class AegisProtection(gl.Contract):
         return result
 
     @gl.public.view
-    def get_my_protections(self, account: Address, start: u256, limit: u16) -> list[dict]:
+    def get_owned_protection_ids(self, account_hex: str, start: u256, limit: u16) -> list[u256]:
+        return self._owned_protection_ids(_address(account_hex), start, limit)
+
+    @gl.public.view
+    def get_my_protections(self, account_hex: str, start: u256, limit: u16) -> list[dict]:
+        account = _address(account_hex)
         result = []
-        for stored_id in self.get_owned_protection_ids(account, start, limit):
+        for stored_id in self._owned_protection_ids(account, start, limit):
             protection_id = int(stored_id)
             result.append(self._protection_card(protection_id, self._protection(protection_id)))
         return result
@@ -795,7 +816,8 @@ class AegisProtection(gl.Contract):
         return result
 
     @gl.public.view
-    def is_settlement_operator(self, operator: Address) -> bool:
+    def is_settlement_operator(self, operator_hex: str) -> bool:
+        operator = _address(operator_hex)
         return self.settlement_operators.get(operator, False)
 
     @gl.public.view
@@ -814,7 +836,8 @@ class AegisProtection(gl.Contract):
         return [self.settlement_operator_addresses[u32(i)].as_hex for i in range(int(self.settlement_operator_count))]
 
     @gl.public.view
-    def can_settle_protection(self, caller: Address, protection_id: u256) -> dict:
+    def can_settle_protection(self, caller_hex: str, protection_id: u256) -> dict:
+        caller = _address(caller_hex)
         item = self._protection(int(protection_id))
         owner = caller == self.owner
         operator = self.settlement_operators.get(caller, False)
@@ -848,8 +871,9 @@ class AegisProtection(gl.Contract):
         gl.get_contract_at(self.owner).emit_transfer(value=u256(amount_native), on='finalized')
 
     @gl.public.write
-    def add_settlement_operator(self, operator: Address) -> None:
+    def add_settlement_operator(self, operator_hex: str) -> None:
         self._only_owner()
+        operator = _address(operator_hex, False)
         if int(operator.as_hex, 16) == 0 or operator == self.owner:
             _user_error(E_INVALID_OPERATOR)
         if self.settlement_operators.get(operator, False):
@@ -863,8 +887,9 @@ class AegisProtection(gl.Contract):
         self.settlement_operator_count = u16(count + 1)
 
     @gl.public.write
-    def remove_settlement_operator(self, operator: Address) -> None:
+    def remove_settlement_operator(self, operator_hex: str) -> None:
         self._only_owner()
+        operator = _address(operator_hex, False)
         if not self.settlement_operators.get(operator, False):
             _user_error(E_OPERATOR_MISSING)
         count = int(self.settlement_operator_count)

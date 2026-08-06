@@ -393,6 +393,18 @@ def test_schema_extraction_and_abi_method_names():
         "can_settle_protection",
     ):
         assert name in methods
+    string_address_params = {
+        "get_my_dashboard_summary": "account_hex",
+        "get_owned_protection_count": "account_hex",
+        "get_owned_protection_ids": "account_hex",
+        "get_my_protections": "account_hex",
+        "is_settlement_operator": "operator_hex",
+        "can_settle_protection": "caller_hex",
+        "add_settlement_operator": "operator_hex",
+        "remove_settlement_operator": "operator_hex",
+    }
+    for name, parameter in string_address_params.items():
+        assert methods[name]["params"][0] == [parameter, "string"]
     assert "create_market_observation" not in methods
     assert "process_protection" not in methods
     assert "get_market_settlement" in methods

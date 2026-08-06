@@ -170,6 +170,6 @@ def test_owner_index_is_storage_safe_and_bounded():
     fund(contract)
     first = purchase(contract, buyer=ALICE)
     second = purchase(contract, market="USD_JPY", buyer=ALICE)
-    assert contract.get_owned_protection_count(C.Address(ALICE)) == 2
-    assert contract.get_owned_protection_ids(C.Address(ALICE), 0, 10) == [first, second]
-    assert_error(C.E_BAD_PAGE, lambda: contract.get_owned_protection_ids(C.Address(ALICE), 0, 51))
+    assert contract.get_owned_protection_count(ALICE) == 2
+    assert contract.get_owned_protection_ids(ALICE, 0, 10) == [first, second]
+    assert_error(C.E_BAD_PAGE, lambda: contract.get_owned_protection_ids(ALICE, 0, 51))

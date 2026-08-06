@@ -1,5 +1,4 @@
-import { hexToBytes, isAddress, type Address } from "viem";
-import { CalldataAddress } from "genlayer-js/types";
+import { isAddress, type Address } from "viem";
 import { aegisConfig } from "./contract-config";
 import { createAegisReadClient } from "./contract-client";
 import {
@@ -22,11 +21,7 @@ import {
 import { AEGIS_METHODS } from "./contract-schema";
 import type { Duration, MarketId, SettlementResult, Threshold } from "./types";
 
-type ContractArg = string | number | bigint | boolean | CalldataAddress;
-
-export function toCalldataAddress(account: Address) {
-  return new CalldataAddress(hexToBytes(account));
-}
+type ContractArg = string | number | bigint | boolean;
 
 export async function readAegisContract(
   functionName: string,
@@ -113,21 +108,13 @@ export async function getProtection(protectionId: bigint, account?: Address) {
 
 export async function getMyDashboardSummary(account: Address) {
   return mapDashboardSummary(
-    await readAegisContract(
-      AEGIS_METHODS.getMyDashboardSummary,
-      [toCalldataAddress(account)],
-      account,
-    ),
+    await readAegisContract(AEGIS_METHODS.getMyDashboardSummary, [account], account),
   );
 }
 
 export async function getOwnedProtectionCount(account: Address) {
   return contractBigInt(
-    await readAegisContract(
-      AEGIS_METHODS.getOwnedProtectionCount,
-      [toCalldataAddress(account)],
-      account,
-    ),
+    await readAegisContract(AEGIS_METHODS.getOwnedProtectionCount, [account], account),
   );
 }
 
@@ -135,7 +122,7 @@ export async function getOwnedProtectionIds(account: Address, start: bigint, lim
   if (limit < 1 || limit > 50) throw new Error("INVALID_PAGE");
   const raw = await readAegisContract(
     AEGIS_METHODS.getOwnedProtectionIds,
-    [toCalldataAddress(account), start, limit],
+    [account, start, limit],
     account,
   );
   if (!Array.isArray(raw)) throw new Error("CONTRACT_RESPONSE_PARSE_FAILED: IDs is not a list.");
@@ -145,11 +132,7 @@ export async function getOwnedProtectionIds(account: Address, start: bigint, lim
 export async function getMyProtections(account: Address, start: bigint, limit: number) {
   if (limit < 1 || limit > 50) throw new Error("INVALID_PAGE");
   return mapProtections(
-    await readAegisContract(
-      AEGIS_METHODS.getMyProtections,
-      [toCalldataAddress(account), start, limit],
-      account,
-    ),
+    await readAegisContract(AEGIS_METHODS.getMyProtections, [account, start, limit], account),
   );
 }
 
@@ -241,9 +224,7 @@ function contractAddress(value: unknown, field: string): Address {
 }
 
 export async function isSettlementOperator(operator: Address) {
-  return Boolean(
-    await readAegisContract(AEGIS_METHODS.isSettlementOperator, [toCalldataAddress(operator)]),
-  );
+  return Boolean(await readAegisContract(AEGIS_METHODS.isSettlementOperator, [operator]));
 }
 
 export async function getSettlementOperatorCount() {
@@ -277,10 +258,6 @@ export async function getSettlementOperators() {
 
 export async function canSettleProtection(caller: Address, protectionId: bigint) {
   return mapSettlementAuthorization(
-    await readAegisContract(
-      AEGIS_METHODS.canSettleProtection,
-      [toCalldataAddress(caller), protectionId],
-      caller,
-    ),
+    await readAegisContract(AEGIS_METHODS.canSettleProtection, [caller, protectionId], caller),
   );
 }

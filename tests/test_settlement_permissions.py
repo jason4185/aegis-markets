@@ -12,7 +12,7 @@ OPERATORS = ["0x" + f"{value:040x}" for value in range(4, 10)]
 
 def add(contract, operator):
     set_context(OWNER)
-    contract.add_settlement_operator(Address(operator))
+    contract.add_settlement_operator(operator)
 
 
 def policy(owner=ALICE):
@@ -32,30 +32,40 @@ def test_owner_adds_operator_and_all_reads_are_consistent():
     add(contract, OPERATORS[0])
     operator = Address(OPERATORS[0])
     assert contract.get_settlement_operator_count() == 1
-    assert contract.is_settlement_operator(operator) is True
+    assert contract.is_settlement_operator(OPERATORS[0]) is True
     assert contract.get_settlement_operator_at(0) == OPERATORS[0]
     assert contract.get_settlement_operators() == [OPERATORS[0]]
     assert contract.settlement_operator_indexes[operator] == 1
 
 
+def test_public_address_inputs_are_strings_and_normalized_internally():
+    contract = deploy()
+    checksum = "0xC8Ba5DA455b011863F2ECa76a6Fa21E62Cc91B87"
+    assert contract.get_my_dashboard_summary(checksum)["account"] == checksum.lower()
+    assert contract.get_owned_protection_count(checksum) == 0
+    assert contract.is_settlement_operator(checksum) is False
+    for invalid in ("0x1234", "", "not-an-address", "0x" + "zz" * 20, ZERO):
+        assert_error(C.E_INVALID_ADDRESS, lambda value=invalid: contract.get_owned_protection_count(value))
+
+
 def test_only_owner_can_add_and_invalid_addresses_are_rejected():
     contract = deploy()
     set_context(ALICE)
-    assert_error(C.E_UNAUTHORIZED, lambda: contract.add_settlement_operator(Address(OPERATORS[0])))
+    assert_error(C.E_UNAUTHORIZED, lambda: contract.add_settlement_operator(OPERATORS[0]))
     set_context(OWNER)
-    assert_error(C.E_INVALID_OPERATOR, lambda: contract.add_settlement_operator(Address(ZERO)))
-    assert_error(C.E_INVALID_OPERATOR, lambda: contract.add_settlement_operator(Address(OWNER)))
+    assert_error(C.E_INVALID_OPERATOR, lambda: contract.add_settlement_operator(ZERO))
+    assert_error(C.E_INVALID_OPERATOR, lambda: contract.add_settlement_operator(OWNER))
 
 
 def test_duplicate_and_sixth_operator_are_rejected_and_count_never_exceeds_five():
     contract = deploy()
     add(contract, OPERATORS[0])
     set_context(OWNER)
-    assert_error(C.E_OPERATOR_EXISTS, lambda: contract.add_settlement_operator(Address(OPERATORS[0])))
+    assert_error(C.E_OPERATOR_EXISTS, lambda: contract.add_settlement_operator(OPERATORS[0]))
     for expected, operator in enumerate(OPERATORS[1:5], 2):
-        contract.add_settlement_operator(Address(operator))
+        contract.add_settlement_operator(operator)
         assert contract.get_settlement_operator_count() == expected
-    assert_error(C.E_OPERATOR_LIMIT, lambda: contract.add_settlement_operator(Address(OPERATORS[5])))
+    assert_error(C.E_OPERATOR_LIMIT, lambda: contract.add_settlement_operator(OPERATORS[5]))
     assert contract.get_settlement_operator_count() == 5
     assert contract.get_settlement_operators() == OPERATORS[:5]
 
@@ -70,12 +80,12 @@ def test_only_owner_removes_known_operator():
     contract = deploy()
     add(contract, OPERATORS[0])
     set_context(ALICE)
-    assert_error(C.E_UNAUTHORIZED, lambda: contract.remove_settlement_operator(Address(OPERATORS[0])))
+    assert_error(C.E_UNAUTHORIZED, lambda: contract.remove_settlement_operator(OPERATORS[0]))
     set_context(OWNER)
-    assert_error(C.E_OPERATOR_MISSING, lambda: contract.remove_settlement_operator(Address(OPERATORS[1])))
-    contract.remove_settlement_operator(Address(OPERATORS[0]))
+    assert_error(C.E_OPERATOR_MISSING, lambda: contract.remove_settlement_operator(OPERATORS[1]))
+    contract.remove_settlement_operator(OPERATORS[0])
     assert contract.get_settlement_operator_count() == 0
-    assert contract.is_settlement_operator(Address(OPERATORS[0])) is False
+    assert contract.is_settlement_operator(OPERATORS[0]) is False
     assert contract.get_settlement_operators() == []
 
 
@@ -83,7 +93,7 @@ def test_swap_and_pop_updates_reverse_index_and_reuses_slot():
     contract = deploy()
     for operator in OPERATORS[:5]:
         add(contract, operator)
-    removed = Address(OPERATORS[1])
+    removed = OPERATORS[1]
     moved = Address(OPERATORS[4])
     set_context(OWNER)
     contract.remove_settlement_operator(removed)
@@ -92,7 +102,7 @@ def test_swap_and_pop_updates_reverse_index_and_reuses_slot():
     assert OPERATORS[1] not in contract.get_settlement_operators()
     assert contract.get_settlement_operator_at(1) == OPERATORS[4]
     assert contract.settlement_operator_indexes[moved] == 2
-    contract.add_settlement_operator(Address(OPERATORS[5]))
+    contract.add_settlement_operator(OPERATORS[5])
     assert contract.get_settlement_operator_at(4) == OPERATORS[5]
     assert len(set(contract.get_settlement_operators())) == 5
 
@@ -117,7 +127,7 @@ def test_protection_owner_cannot_settle_another_policy_unless_approved():
 
 def test_unrelated_and_removed_operators_fail_before_web_requests():
     contract, protection_id = policy()
-    operator = Address(OPERATORS[0])
+    operator = OPERATORS[0]
     add(contract, OPERATORS[0])
     set_context(OWNER)
     contract.remove_settlement_operator(operator)
@@ -132,15 +142,15 @@ def test_unrelated_and_removed_operators_fail_before_web_requests():
 def test_can_settle_protection_reports_each_role_and_missing_policy():
     contract, protection_id = policy()
     add(contract, OPERATORS[0])
-    owner = contract.can_settle_protection(Address(OWNER), protection_id)
-    operator = contract.can_settle_protection(Address(OPERATORS[0]), protection_id)
-    protection_owner = contract.can_settle_protection(Address(ALICE), protection_id)
-    unrelated = contract.can_settle_protection(Address(OPERATORS[1]), protection_id)
+    owner = contract.can_settle_protection(OWNER, protection_id)
+    operator = contract.can_settle_protection(OPERATORS[0], protection_id)
+    protection_owner = contract.can_settle_protection(ALICE, protection_id)
+    unrelated = contract.can_settle_protection(OPERATORS[1], protection_id)
     assert owner == {"authorized": True, "is_contract_owner": True, "is_operator": False, "is_protection_owner": False}
     assert operator == {"authorized": True, "is_contract_owner": False, "is_operator": True, "is_protection_owner": False}
     assert protection_owner == {"authorized": True, "is_contract_owner": False, "is_operator": False, "is_protection_owner": True}
     assert unrelated["authorized"] is False
-    assert_error(C.E_NOT_FOUND, lambda: contract.can_settle_protection(Address(OWNER), 999))
+    assert_error(C.E_NOT_FOUND, lambda: contract.can_settle_protection(OWNER, 999))
 
 
 def test_operator_storage_survives_pickle_reload_after_swap_and_pop():
@@ -148,7 +158,7 @@ def test_operator_storage_survives_pickle_reload_after_swap_and_pop():
     for operator in OPERATORS[:3]:
         add(contract, operator)
     set_context(OWNER)
-    contract.remove_settlement_operator(Address(OPERATORS[1]))
+    contract.remove_settlement_operator(OPERATORS[1])
     restored = pickle.loads(pickle.dumps({
         "authorized": contract.settlement_operators,
         "addresses": contract.settlement_operator_addresses,

@@ -18,7 +18,6 @@ import {
   getSettlementReadiness,
   isSettlementOperator,
   quoteProtection,
-  toCalldataAddress,
 } from "./contract-reads";
 import { AEGIS_METHODS } from "./contract-schema";
 import { aegisKeys } from "./query-keys";
@@ -26,7 +25,7 @@ import type { Duration, MarketId, Threshold, TransactionProgress } from "./types
 import type { ActiveWalletConnector, Eip1193Provider, WriteContext } from "@/lib/web3/wallet";
 import { explorerTransactionUrl } from "@/lib/web3/chains";
 
-type ContractArg = string | number | bigint | boolean | ReturnType<typeof toCalldataAddress>;
+type ContractArg = string | number | bigint | boolean;
 type ProgressCallback = (progress: TransactionProgress) => void;
 type AegisWriteClient = ReturnType<typeof createAegisWriteClient>;
 
@@ -479,7 +478,7 @@ export async function addSettlementOperator({
   const transaction = await writeAegisContract({
     context,
     functionName: AEGIS_METHODS.addSettlementOperator,
-    args: [toCalldataAddress(operator)],
+    args: [operator],
     onProgress,
   });
   await invalidate(queryClient, [
@@ -508,7 +507,7 @@ export async function removeSettlementOperator({
   const transaction = await writeAegisContract({
     context,
     functionName: AEGIS_METHODS.removeSettlementOperator,
-    args: [toCalldataAddress(operator)],
+    args: [operator],
     onProgress,
   });
   await invalidate(queryClient, [

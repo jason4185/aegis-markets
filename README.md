@@ -7,7 +7,7 @@
 | Deployment       | Current value                                                                                                                             |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Network          | GenLayer Bradbury                                                                                                                         |
-| Contract         | [`0x884b5F5aEa2849999e5091b55d85de5f0f681597`](https://explorer-bradbury.genlayer.com/address/0x884b5F5aEa2849999e5091b55d85de5f0f681597) |
+| Contract         | [`0xe44E5B93baCF3da55840b452D5274e175214C19D`](https://explorer-bradbury.genlayer.com/address/0xe44E5B93baCF3da55840b452D5274e175214C19D) |
 | Wallets          | Installed EVM-compatible browser wallets                                                                                                  |
 | Contract version | `1.0.0`                                                                                                                                   |
 
@@ -318,7 +318,7 @@ retries, duplicate-call safety, lifecycle counters, and reserve accounting.
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Network          | GenLayer Bradbury                                                                                                                         |
 | Chain ID         | `4221`                                                                                                                                    |
-| Contract         | [`0x884b5F5aEa2849999e5091b55d85de5f0f681597`](https://explorer-bradbury.genlayer.com/address/0x884b5F5aEa2849999e5091b55d85de5f0f681597) |
+| Contract         | [`0xe44E5B93baCF3da55840b452D5274e175214C19D`](https://explorer-bradbury.genlayer.com/address/0xe44E5B93baCF3da55840b452D5274e175214C19D) |
 | RPC              | [https://rpc-bradbury.genlayer.com](https://rpc-bradbury.genlayer.com)                                                                    |
 | Explorer         | [https://explorer-bradbury.genlayer.com](https://explorer-bradbury.genlayer.com)                                                          |
 | Contract version | `1.0.0`                                                                                                                                   |
