@@ -9,23 +9,23 @@ const STEPS: { id: TransactionStage; label: string; hint: string }[] = [
   {
     id: "preparing",
     label: "Preparing",
-    hint: "Checking the wallet, network and contract request.",
+    hint: "Checking your wallet and preparing the request.",
   },
   {
     id: "awaiting_wallet",
     label: "Awaiting wallet",
     hint: "Review and approve the transaction in your wallet.",
   },
-  { id: "submitted", label: "Submitted", hint: "The transaction was submitted to GenLayer." },
+  { id: "submitted", label: "Submitted", hint: "The transaction was submitted." },
   {
     id: "validator_consensus",
-    label: "Validator consensus",
-    hint: "GenLayer validators are evaluating the transaction.",
+    label: "Processing",
+    hint: "The network is processing the transaction.",
   },
   {
     id: "completed",
     label: "Completed",
-    hint: "The transaction was accepted by GenLayer.",
+    hint: "Your request was completed successfully.",
   },
 ];
 
@@ -166,12 +166,9 @@ export function TransactionProgressModal({
           </ol>
 
           {progress.hash ? (
-            <div className="rounded-lg border border-border bg-secondary/40 p-3 text-xs">
-              <p className="numeric break-all">{progress.hash}</p>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
-                <span>{progress.method}</span>
-                <span>{progress.status}</span>
-              </div>
+            <details className="rounded-lg border border-border bg-secondary/40 p-3 text-xs">
+              <summary className="cursor-pointer font-medium">Transaction details</summary>
+              <p className="numeric mt-2 break-all text-muted-foreground">{progress.hash}</p>
               {progress.explorerUrl ? (
                 <a
                   className="mt-2 inline-flex items-center gap-1 text-primary hover:underline"
@@ -182,7 +179,7 @@ export function TransactionProgressModal({
                   View in explorer <ExternalLink className="size-3" />
                 </a>
               ) : null}
-            </div>
+            </details>
           ) : null}
 
           {canClose ? (
@@ -214,18 +211,17 @@ export function TransactionProgressModal({
 }
 
 function completionMessage(method?: string) {
-  const accepted = "The transaction was accepted by GenLayer.";
   if (method === "purchase_protection") {
-    return `Your protection has been created successfully. ${accepted}`;
+    return "Your protection has been created successfully.";
   }
   if (method === "settle_protection") {
-    return `The settlement transaction was accepted successfully. ${accepted}`;
+    return "Settlement completed successfully.";
   }
   if (method === "claim_payout") {
-    return `Your payout claim was accepted successfully. ${accepted}`;
+    return "Your payout was received successfully.";
   }
   if (method === "add_settlement_operator" || method === "remove_settlement_operator") {
-    return `The operator update was accepted successfully. ${accepted}`;
+    return "The operator update was completed successfully.";
   }
-  return accepted;
+  return "Transaction completed successfully.";
 }

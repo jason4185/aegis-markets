@@ -8,26 +8,25 @@ export type NormalizedAegisError = {
 
 const CONTRACT_MESSAGES: Record<string, string> = {
   INVALID_MARKET: "This market is not supported.",
-  INVALID_DURATION: "Choose a 7, 14 or 30-day protection period.",
-  INVALID_EVENT_LEVEL: "Choose a 2%, 3% or 4% movement threshold.",
+  INVALID_DURATION: "Choose a supported protection duration.",
+  INVALID_EVENT_LEVEL: "Choose a supported market-move level.",
   INVALID_PREMIUM:
     "The transaction value does not match the current premium. Refresh the quote and try again.",
-  INSUFFICIENT_AVAILABLE_LIQUIDITY:
-    "The protocol does not currently have enough available liquidity for this payout.",
+  INSUFFICIENT_AVAILABLE_LIQUIDITY: "There is not enough available liquidity for this protection.",
   PURCHASES_PAUSED: "New protection purchases are temporarily paused.",
   SETTLEMENT_OPERATOR_ALREADY_APPROVED: "This address is already an approved settlement operator.",
   SETTLEMENT_OPERATOR_NOT_FOUND: "This address is not an approved settlement operator.",
   SETTLEMENT_OPERATOR_LIMIT_REACHED: "A maximum of five settlement operators is allowed.",
   INVALID_SETTLEMENT_OPERATOR_INDEX: "The requested operator entry does not exist.",
   INVALID_SETTLEMENT_OPERATOR: "Enter a valid operator address that is not the contract owner.",
-  UNAUTHORIZED_CALLER: "This wallet is not authorized for this action.",
-  INVALID_SETTLEMENT_DATE: "This settlement date is not eligible.",
+  UNAUTHORIZED_CALLER: "This wallet is not permitted to perform this action.",
+  INVALID_SETTLEMENT_DATE: "This date cannot be settled yet.",
   MARKET_SETTLEMENT_ALREADY_FINALIZED:
     "This market settlement cannot create another final version.",
   MARKET_SETTLEMENT_MISSING: "Verified market data for this date is not available.",
   PROTECTION_NOT_ACTIVE: "This protection is no longer active.",
   PROTECTION_NOT_FOUND: "This protection could not be found.",
-  PROTECTION_NOT_CLAIMABLE: "This protection is not ready to claim.",
+  PROTECTION_NOT_CLAIMABLE: "No payout is currently available.",
   PAYOUT_ALREADY_CLAIMED: "This payout has already been claimed.",
   RESERVE_ALREADY_RELEASED: "The reserved payout has already been released.",
   ACCOUNTING_INVARIANT:
@@ -36,6 +35,7 @@ const CONTRACT_MESSAGES: Record<string, string> = {
   MALFORMED_SOURCE_RESPONSE: "A market-data source returned an invalid response.",
   MISSING_SOURCE_RATE: "A required market rate was missing from the source response.",
   INVALID_SOURCE_TIMESTAMP: "The purchase reference timestamp could not be verified.",
+  INVALID_ADDRESS: "The wallet address is invalid.",
 };
 
 function errorText(error: unknown) {

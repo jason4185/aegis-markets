@@ -17,7 +17,7 @@ import {
   getSettlementReadiness,
 } from "@/lib/aegis/contract-reads";
 import { publicReadErrorMessage } from "@/lib/aegis/errors";
-import { formatDate, formatGen, formatPrice, formatProtectionId } from "@/lib/aegis/format";
+import { formatDate, formatGen, formatPrice } from "@/lib/aegis/format";
 import { aegisKeys } from "@/lib/aegis/query-keys";
 import type { ContractStatus, ProtectionCard } from "@/lib/aegis/types";
 import { useWalletState } from "@/hooks/use-wallet-state";
@@ -303,8 +303,7 @@ function ProtectionRow({
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {protection.direction === "DOWN" ? "Downward move" : "Upward move"} ·{" "}
-            {protection.event_percent}% · {protection.duration_days} days ·{" "}
-            <span className="numeric">{formatProtectionId(protection.id)}</span>
+            {protection.event_percent}% · {protection.duration_days} days
           </p>
         </div>
         <div className="text-right">
@@ -322,21 +321,21 @@ function ProtectionRow({
           value={formatPrice(protection.trigger_price, protection.symbol)}
         />
         <Field
-          label="Purchased"
+          label="Purchased on"
           value={new Date(Number(protection.purchased_at * 1000n)).toLocaleDateString("en-GB", {
             timeZone: "UTC",
           })}
         />
         <Field
-          label="Next settlement"
-          value={nextDate ? `${formatDate(nextDate)}${ready ? " · Ready" : ""}` : "None remaining"}
+          label="Next settlement date"
+          value={nextDate ? `${formatDate(nextDate)}${ready ? " · Ready" : ""}` : "Complete"}
         />
       </dl>
       <div className="mt-6">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            Settlement progress: {protection.processed_dates.toString()} of{" "}
-            {protection.duration_days} dates completed
+            Settlement days completed: {protection.processed_dates.toString()} of{" "}
+            {protection.duration_days}
           </span>
           <span>{progress}%</span>
         </div>

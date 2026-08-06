@@ -13,8 +13,8 @@ export function SiteFooter() {
           <div>
             <LogoLockup variant="reversed" markClassName="size-9" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-foreground/65">
-              Fixed-payout protection for selected currency and metals markets, verified through
-              GenLayer consensus.
+              Fixed-payout protection for selected currency and metals markets, checked against
+              independent market data.
             </p>
           </div>
           <FooterCol

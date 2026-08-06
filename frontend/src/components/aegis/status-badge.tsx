@@ -1,18 +1,12 @@
 import { cn } from "@/lib/utils";
-import type { ContractStatus, SettlementDayState, SettlementResult } from "@/lib/aegis/types";
+import type { ContractStatus, SettlementDayState } from "@/lib/aegis/types";
+import { contractStatusLabel } from "@/lib/aegis/format";
 
 const STATUS_STYLES: Record<ContractStatus, string> = {
   ACTIVE: "bg-info/10 text-info border-info/25",
   CLAIMABLE: "bg-brass/15 text-brass-foreground border-brass/45",
   EXPIRED: "bg-muted text-muted-foreground border-border",
   CLAIMED: "bg-success/12 text-success border-success/30",
-};
-
-const STATUS_LABEL: Record<ContractStatus, string> = {
-  ACTIVE: "Active",
-  CLAIMABLE: "Claimable",
-  EXPIRED: "Expired",
-  CLAIMED: "Claimed",
 };
 
 export function StatusBadge({ status, className }: { status: ContractStatus; className?: string }) {
@@ -25,7 +19,7 @@ export function StatusBadge({ status, className }: { status: ContractStatus; cla
       )}
     >
       <span className="size-1.5 rounded-full bg-current" />
-      {STATUS_LABEL[status]}
+      {contractStatusLabel(status)}
     </span>
   );
 }
@@ -43,9 +37,9 @@ export const DAY_LABEL: Record<SettlementDayState, string> = {
   UPCOMING: "Upcoming",
   READY: "Ready",
   SETTLING: "Settling",
-  NOT_BREACHED: "Not breached",
-  BREACHED: "Breached",
-  INCONCLUSIVE: "Inconclusive",
+  NOT_BREACHED: "No qualifying move",
+  BREACHED: "Qualifying move confirmed",
+  INCONCLUSIVE: "Awaiting confirmation",
 };
 
 export function DayStateBadge({
@@ -66,15 +60,4 @@ export function DayStateBadge({
       {DAY_LABEL[state]}
     </span>
   );
-}
-
-const RESULT_LABEL: Record<SettlementResult, string> = {
-  UNPROCESSED: "Unprocessed",
-  BREACHED: "Breached",
-  NOT_BREACHED: "Not breached",
-  INCONCLUSIVE: "Inconclusive",
-};
-
-export function resultLabel(result: SettlementResult) {
-  return RESULT_LABEL[result];
 }

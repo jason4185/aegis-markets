@@ -17,7 +17,15 @@ import {
   mapSettlementAuthorization,
   mapSettlementReadiness,
 } from "../src/lib/aegis/contract-mappers";
-import { formatGen, formatGenUnits, formatPrice, formatScaled } from "../src/lib/aegis/format";
+import {
+  contractStatusLabel,
+  formatGen,
+  formatGenUnits,
+  formatPrice,
+  formatScaled,
+  reserveStatusLabel,
+  settlementResultLabel,
+} from "../src/lib/aegis/format";
 import {
   isEip1193Provider,
   parseProviderChainId,
@@ -506,11 +514,14 @@ describe("write architecture and lifecycle", () => {
     expect(recovery).toContain('"validator_consensus"');
     expect(recovery).not.toContain('"confirming"');
     expect(modal).toContain("done && index <= currentIndex");
-    expect(modal).toContain("The transaction was accepted by GenLayer.");
+    expect(modal).not.toContain("Validator consensus");
+    expect(modal).not.toContain("The transaction was accepted by GenLayer.");
     expect(modal).toContain("Your protection has been created successfully.");
-    expect(modal).toContain("The settlement transaction was accepted successfully.");
-    expect(modal).toContain("Your payout claim was accepted successfully.");
-    expect(modal).toContain("The operator update was accepted successfully.");
+    expect(modal).toContain("Settlement completed successfully.");
+    expect(modal).toContain("Your payout was received successfully.");
+    expect(modal).toContain("The operator update was completed successfully.");
+    expect(modal).toContain("Transaction details");
+    expect(modal).not.toContain("{progress.method}");
   });
 
   it("keeps purchase review copy user-facing", async () => {
@@ -542,8 +553,24 @@ describe("write architecture and lifecycle", () => {
     const removed = ["finalize", "expired", "protection"].join("_");
     expect(writes).not.toContain(removed);
     expect(details).not.toContain(["Finalize", "expiry"].join(" "));
-    expect(details).toContain("expired automatically after its final required Not breached");
-    expect(details).toContain("settlement, and its reserved payout was released");
+    expect(details).toContain("ended automatically after its final required no-move");
+    expect(details).toContain("and its reserved payout was released by the contract");
+  });
+
+  it("translates contract status and settlement values for product screens", () => {
+    expect(contractStatusLabel("ACTIVE")).toBe("Active");
+    expect(contractStatusLabel("CLAIMABLE")).toBe("Payout available");
+    expect(contractStatusLabel("EXPIRED")).toBe("Ended");
+    expect(contractStatusLabel("CLAIMED")).toBe("Paid");
+    expect(settlementResultLabel("UNPROCESSED")).toBe("Not checked yet");
+    expect(settlementResultLabel("INCONCLUSIVE")).toBe("Awaiting confirmation");
+    expect(settlementResultLabel("NOT_BREACHED")).toBe("No qualifying move");
+    expect(settlementResultLabel("BREACHED")).toBe("Qualifying move confirmed");
+    expect(reserveStatusLabel("RESERVED")).toBe("Secured");
+    expect(reserveStatusLabel("RELEASED")).toBe("Released");
+    expect(contractStatusLabel("unexpected")).toBe("Status unavailable");
+    expect(settlementResultLabel("unexpected")).toBe("Status unavailable");
+    expect(reserveStatusLabel("unexpected")).toBe("Status unavailable");
   });
 
   it("contains no approval flow and invalidates contract-backed queries after writes", async () => {
@@ -563,6 +590,22 @@ describe("route states and production data", () => {
     expect(dashboard).toContain("No protections found for this wallet.");
     expect(dashboard).toContain("count.data === 0n");
     expect(dashboard).toContain("remaining > 50n ? 50n : remaining");
+  });
+
+  it("keeps internal protection IDs out of ordinary product copy", async () => {
+    const dashboard = await source("../src/routes/dashboard.tsx");
+    const details = await source("../src/routes/protection.$id.tsx");
+    const review = await source("../src/components/aegis/review-modal.tsx");
+    expect(dashboard).not.toContain("formatProtectionId");
+    expect(dashboard).not.toContain("Protection #");
+    expect(details).not.toContain("PROTECTION #");
+    expect(details).not.toContain("Market ID");
+    expect(details).not.toContain("value={details.data.reserve_status}");
+    expect(details).not.toContain("value={details.data.latest_settlement_result}");
+    expect(details).not.toContain('label="Inconclusive dates"');
+    expect(details).not.toContain('label="Processed dates"');
+    expect(details).toContain("Your wallet");
+    expect(review).not.toContain("quote.market_id");
   });
 
   it("shows settlement only after readiness and contract authorization", async () => {
@@ -608,6 +651,7 @@ describe("normalized errors", () => {
     ["SETTLEMENT_OPERATOR_LIMIT_REACHED", "maximum of five"],
     ["INVALID_SETTLEMENT_OPERATOR", "valid operator address"],
     ["INVALID_SETTLEMENT_OPERATOR_INDEX", "operator entry does not exist"],
+    ["INVALID_ADDRESS", "wallet address is invalid"],
   ])("maps %s", (code, expected) => {
     expect(normalizeAegisError(new Error(code)).message).toContain(expected);
   });

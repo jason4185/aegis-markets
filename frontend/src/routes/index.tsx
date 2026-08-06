@@ -40,10 +40,10 @@ export const Route = createFileRoute("/")({
 });
 
 const PROOF = [
-  { icon: Users, label: "GenLayer Consensus" },
+  { icon: Users, label: "Independent Market Checks" },
   { icon: ScrollText, label: "Two Independent Price Sources" },
   { icon: LockKeyhole, label: "Fixed Payout Terms" },
-  { icon: Calendar, label: "Permissionless Daily Settlement" },
+  { icon: Calendar, label: "Settlement when ready" },
 ];
 
 function Landing() {
@@ -106,7 +106,7 @@ function Landing() {
               <p className="text-sm text-muted-foreground">
                 {featuredMarket
                   ? MARKET_PRESENTATION[featuredMarket.market_id].protectedAgainst
-                  : "Reading the deployed AegisProtection contract"}
+                  : "Loading market terms…"}
               </p>
               <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
                 <Cell

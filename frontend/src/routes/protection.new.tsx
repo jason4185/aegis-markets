@@ -45,7 +45,7 @@ export const Route = createFileRoute("/protection/new")({
       { title: "Get Protection — Aegis Markets" },
       {
         name: "description",
-        content: "Configure fixed-payout protection using the live AegisProtection contract terms.",
+        content: "Configure fixed-payout protection using the current market terms.",
       },
     ],
   }),
@@ -152,7 +152,7 @@ function NewProtection() {
       <PageHeader
         eyebrow="New protection"
         title="Configure your protection"
-        description="Direction, premium and fixed payout are read from the deployed AegisProtection contract."
+        description="Direction, premium and fixed payout come from the current protection terms."
       />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">

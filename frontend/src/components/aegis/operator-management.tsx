@@ -106,7 +106,7 @@ export function OperatorManagement() {
             Settlement operators
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Approved operators can settle any active protection. The contract allows at most five.
+            Approved operators can settle any active protection. Up to five can be active at once.
           </p>
         </div>
         <span className="rounded-full border border-border px-3 py-1 text-sm">
@@ -160,7 +160,7 @@ export function OperatorManagement() {
         <p className="mt-2 text-sm text-destructive">Enter a valid EVM address.</p>
       ) : isOwnerAddress ? (
         <p className="mt-2 text-sm text-destructive">
-          The contract owner cannot be added as an operator.
+          The owner wallet cannot be added as an operator.
         </p>
       ) : isDuplicate ? (
         <p className="mt-2 text-sm text-destructive">

@@ -62,7 +62,7 @@ export function ReviewModal({
               label="Connected wallet"
               value={walletAddress ? shortenAddress(walletAddress) : "Not connected"}
             />
-            <Row label="Network" value={`${aegisConfig.networkName} (${aegisConfig.chainId})`} />
+            <Row label="Network" value="Bradbury" />
             <Row
               label="Contract"
               value={
@@ -73,7 +73,7 @@ export function ReviewModal({
             />
           </div>
           <div className="py-1">
-            <Row label="Market" value={`${quote.symbol} (${quote.market_id})`} />
+            <Row label="Market" value={quote.symbol} />
             <Row label="Protected direction" value={direction} />
             <Row label="Movement threshold" value={`${quote.event_percent}%`} />
             <Row label="Protection period" value={`${quote.duration_days} days`} />

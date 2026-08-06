@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/aegis/page-header";
-import { StatusBadge, resultLabel } from "@/components/aegis/status-badge";
+import { StatusBadge } from "@/components/aegis/status-badge";
 import { WalletControl } from "@/components/aegis/wallet-control";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,17 +19,19 @@ import {
   formatDate,
   formatGen,
   formatPrice,
-  formatProtectionId,
+  reserveStatusLabel,
+  settlementResultLabel,
   formatUnixDate,
   formatUnixDateTime,
 } from "@/lib/aegis/format";
 import { aegisKeys } from "@/lib/aegis/query-keys";
 import { useTransactionManager } from "@/lib/aegis/transaction-context";
 import { useWalletState } from "@/hooks/use-wallet-state";
+import { shortenAddress } from "@/lib/web3/wallet";
 import { aegisConfig } from "@/lib/aegis/contract-config";
 
 export const Route = createFileRoute("/protection/$id")({
-  head: ({ params }) => ({ meta: [{ title: `Protection #${params.id} — Aegis Markets` }] }),
+  head: () => ({ meta: [{ title: "Protection details — Aegis Markets" }] }),
   component: ProtectionPage,
 });
 
@@ -141,8 +143,8 @@ function ProtectionPage() {
   if (protectionId === null) {
     return (
       <MessagePage
-        title="Invalid protection ID"
-        body="Protection routes require a non-negative integer ID."
+        title="Protection link unavailable"
+        body="This protection link is not available. Return to your dashboard to continue."
       />
     );
   }
@@ -150,9 +152,8 @@ function ProtectionPage() {
   return (
     <>
       <PageHeader
-        eyebrow={formatProtectionId(protectionId)}
         title={details.data ? `${details.data.symbol} protection` : "Protection details"}
-        description="Terms, settlement state and permissions are read from the deployed AegisProtection contract."
+        description="Your protection terms, settlement history and available actions."
         actions={
           <Button asChild variant="outline">
             <Link to="/dashboard">
@@ -190,8 +191,10 @@ function ProtectionPage() {
                 </div>
               </div>
               <dl className="mt-7 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
-                <Field label="Owner" value={details.data.owner} />
-                <Field label="Market ID" value={details.data.market_id} />
+                <Field
+                  label="Owner"
+                  value={isOwner ? "Your wallet" : shortenAddress(details.data.owner)}
+                />
                 <Field label="Premium" value={formatGen(details.data.premium)} />
                 <Field label="Payout" value={formatGen(details.data.payout)} />
                 <Field
@@ -203,40 +206,51 @@ function ProtectionPage() {
                   value={formatPrice(details.data.trigger_price, details.data.symbol)}
                 />
                 <Field
-                  label="Source timestamp"
+                  label="Price checked at"
                   value={formatUnixDateTime(details.data.source_timestamp)}
                 />
-                <Field label="Purchased" value={formatUnixDateTime(details.data.purchased_at)} />
+                <Field label="Purchased at" value={formatUnixDateTime(details.data.purchased_at)} />
                 <Field
-                  label="First settlement"
+                  label="First settlement date"
                   value={formatDate(details.data.first_settlement_date)}
                 />
                 <Field
-                  label="Last settlement"
+                  label="Final settlement date"
                   value={formatDate(details.data.last_settlement_date)}
                 />
                 <Field
-                  label="Scheduled end (informational)"
+                  label="Protection ends"
                   value={formatUnixDateTime(details.data.expires_at)}
                 />
                 <Field
                   label="Breach date"
                   value={details.data.breach_date ? formatDate(details.data.breach_date) : "—"}
                 />
-                <Field label="Processed dates" value={details.data.processed_dates.toString()} />
                 <Field
-                  label="Inconclusive dates"
-                  value={details.data.inconclusive_dates.toString()}
+                  label="Settlement days completed"
+                  value={details.data.processed_dates.toString()}
                 />
-                <Field label="Remaining dates" value={details.data.remaining_dates.toString()} />
+                {details.data.inconclusive_dates > 0n ? (
+                  <Field
+                    label="Days awaiting confirmation"
+                    value={details.data.inconclusive_dates.toString()}
+                  />
+                ) : null}
+                <Field
+                  label="Settlement days remaining"
+                  value={details.data.remaining_dates.toString()}
+                />
                 <Field
                   label="Latest result"
-                  value={resultLabel(details.data.latest_settlement_result)}
+                  value={settlementResultLabel(details.data.latest_settlement_result)}
                 />
-                <Field label="Next unresolved date" value={nextDate ? formatDate(nextDate) : "—"} />
-                <Field label="Reserve status" value={details.data.reserve_status} />
-                <Field label="Claimable" value={details.data.claimable ? "Yes" : "No"} />
-                <Field label="Claimed" value={details.data.claimed ? "Yes" : "No"} />
+                <Field label="Next settlement date" value={nextDate ? formatDate(nextDate) : "—"} />
+                <Field
+                  label="Payout funds"
+                  value={reserveStatusLabel(details.data.reserve_status)}
+                />
+                <Field label="Payout available" value={details.data.claimable ? "Yes" : "No"} />
+                <Field label="Payout received" value={details.data.claimed ? "Yes" : "No"} />
               </dl>
             </section>
 
@@ -245,15 +259,14 @@ function ProtectionPage() {
               {nextDate && readiness.data ? (
                 <div className="mt-4 rounded-lg border border-border bg-secondary/40 p-4">
                   <p className="text-sm font-medium">
-                    Earliest unresolved date: {formatDate(nextDate)}
+                    Next settlement date: {formatDate(nextDate)}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {READINESS_MESSAGES[readiness.data.reason_code] ?? readiness.data.reason_code}
+                    {READINESS_MESSAGES[readiness.data.reason_code] ?? "Status unavailable"}
                   </p>
                   {marketSettlement.data ? (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Market settlement version {marketSettlement.data.version.toString()} is
-                      finalized.
+                      Verified market data is available for this date.
                     </p>
                   ) : null}
                 </div>
@@ -306,8 +319,8 @@ function ProtectionPage() {
               ) : null}
               {details.data.status === "EXPIRED" ? (
                 <p className="mt-4 text-sm text-muted-foreground">
-                  This protection expired automatically after its final required Not breached
-                  settlement, and its reserved payout was released by the contract.
+                  This protection ended automatically after its final required no-move settlement,
+                  and its reserved payout was released by the contract.
                 </p>
               ) : null}
               {details.data.latest_settlement_result === "BREACHED" ? (
@@ -340,7 +353,7 @@ function ProtectionPage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Result</p>
-                      <p className="mt-1 text-sm">{resultLabel(entry.result)}</p>
+                      <p className="mt-1 text-sm">{settlementResultLabel(entry.result)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Source prices</p>
@@ -349,9 +362,6 @@ function ProtectionPage() {
                           ? `${formatPrice(entry.fxratesapi_price, details.data.symbol)} · ${formatPrice(entry.fawaz_price, details.data.symbol)}`
                           : "Not available"}
                       </p>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      v{entry.market_settlement_version.toString()}
                     </div>
                   </article>
                 ))}

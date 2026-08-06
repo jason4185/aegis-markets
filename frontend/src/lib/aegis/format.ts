@@ -1,4 +1,4 @@
-import type { MarketSymbol } from "./types";
+import type { ContractStatus, MarketSymbol, SettlementResult } from "./types";
 
 export const GEN_UNIT = 10n ** 18n;
 export const PRICE_SCALE = 10n ** 8n;
@@ -67,6 +67,30 @@ export function truncateHash(hash: string) {
   return `${hash.slice(0, 6)}…${hash.slice(-4)}`;
 }
 
-export function formatProtectionId(id: bigint | string) {
-  return `Protection #${id}`;
+const STATUS_LABELS: Record<ContractStatus, string> = {
+  ACTIVE: "Active",
+  CLAIMABLE: "Payout available",
+  EXPIRED: "Ended",
+  CLAIMED: "Paid",
+};
+
+export function contractStatusLabel(status: ContractStatus | string) {
+  return STATUS_LABELS[status as ContractStatus] ?? "Status unavailable";
+}
+
+const SETTLEMENT_RESULT_LABELS: Record<SettlementResult, string> = {
+  UNPROCESSED: "Not checked yet",
+  BREACHED: "Qualifying move confirmed",
+  NOT_BREACHED: "No qualifying move",
+  INCONCLUSIVE: "Awaiting confirmation",
+};
+
+export function settlementResultLabel(result: SettlementResult | string) {
+  return SETTLEMENT_RESULT_LABELS[result as SettlementResult] ?? "Status unavailable";
+}
+
+export function reserveStatusLabel(status: "RESERVED" | "RELEASED" | string) {
+  if (status === "RESERVED") return "Secured";
+  if (status === "RELEASED") return "Released";
+  return "Status unavailable";
 }
