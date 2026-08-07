@@ -133,6 +133,18 @@ transactions. A protection owner can settle their own protection. The contract o
 to five approved operators can settle any protection. If several dates were missed, the
 oldest unresolved date must be handled first, one date at a time.
 
+### Settlement timing
+
+A settlement date represents the UTC market day being evaluated. Daily settlement availability
+is determined in UTC, after that day has closed. For example, a protection purchased on 6 Aug
+has 7 Aug as its first stored settlement date; 7 Aug data becomes available to settle after
+00:00 UTC on 8 Aug, and 8 Aug data becomes available after 00:00 UTC on 9 Aug. The frontend
+prevents same-day attempts while the historical daily market data is still being finalized.
+
+If a date is missed, it remains unresolved rather than being skipped. The oldest unresolved date
+stays next in line, so later dates are handled one at a time in chronological order; processing
+and any resulting payout decision may simply be delayed.
+
 ## UI Tour
 
 ### Explore supported markets
