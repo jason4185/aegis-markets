@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/aegis/page-header";
@@ -29,6 +30,10 @@ import { useTransactionManager } from "@/lib/aegis/transaction-context";
 import { useWalletState } from "@/hooks/use-wallet-state";
 import { shortenAddress } from "@/lib/web3/wallet";
 import { aegisConfig } from "@/lib/aegis/contract-config";
+import {
+  isDailySettlementProcessable,
+  settlementAvailabilityMessage,
+} from "@/lib/aegis/settlement-time";
 
 export const Route = createFileRoute("/protection/$id")({
   head: () => ({ meta: [{ title: "Protection details — Aegis Markets" }] }),
@@ -64,6 +69,7 @@ function ProtectionPage() {
   const wallet = useWalletState();
   const queryClient = useQueryClient();
   const transaction = useTransactionManager();
+  const [now, setNow] = useState(() => new Date());
   const details = useQuery({
     queryKey:
       protectionId === null ? ["aegis", "invalid-protection"] : aegisKeys.details(protectionId),
@@ -78,6 +84,10 @@ function ProtectionPage() {
     enabled: protectionId !== null && Boolean(details.data),
   });
   const nextDate = details.data?.next_unresolved_settlement_date ?? "";
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const readiness = useQuery({
     queryKey:
       protectionId === null
@@ -114,6 +124,15 @@ function ProtectionPage() {
     details.data.can_claim &&
     !details.data.claimed &&
     isOwner,
+  );
+  const dailyDataComplete = isDailySettlementProcessable(nextDate, now);
+  const canSubmitSettlement = Boolean(
+    readiness.data?.ready &&
+    dailyDataComplete &&
+    authorization.data?.authorized &&
+    details.data?.status === "ACTIVE" &&
+    wallet.isConnected &&
+    !wallet.isWrongNetwork,
   );
 
   async function runAction(kind: "settle" | "claim") {
@@ -262,7 +281,10 @@ function ProtectionPage() {
                     Next settlement date: {formatDate(nextDate)}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {READINESS_MESSAGES[readiness.data.reason_code] ?? "Status unavailable"}
+                    {dailyDataComplete
+                      ? (READINESS_MESSAGES[readiness.data.reason_code] ?? "Status unavailable")
+                      : (settlementAvailabilityMessage(nextDate, now) ??
+                        "This settlement date is not eligible yet.")}
                   </p>
                   {marketSettlement.data ? (
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -288,14 +310,18 @@ function ProtectionPage() {
                 </div>
               ) : null}
               <div className="mt-5 flex flex-wrap gap-3">
-                {readiness.data?.ready &&
-                authorization.data?.authorized &&
-                details.data.status === "ACTIVE" &&
-                wallet.isConnected &&
-                !wallet.isWrongNetwork ? (
+                {canSubmitSettlement ? (
                   <Button onClick={() => void runAction("settle")}>
                     Settle {formatDate(nextDate)}
                   </Button>
+                ) : wallet.isConnected &&
+                  !wallet.isWrongNetwork &&
+                  details.data.status === "ACTIVE" &&
+                  Boolean(nextDate) &&
+                  readiness.data?.ready &&
+                  authorization.data?.authorized &&
+                  !dailyDataComplete ? (
+                  <Button disabled>Available after daily close</Button>
                 ) : null}
                 {canClaim && !wallet.isWrongNetwork ? (
                   <Button onClick={() => void runAction("claim")}>
@@ -306,6 +332,7 @@ function ProtectionPage() {
               {wallet.isConnected &&
               details.data.status === "ACTIVE" &&
               nextDate &&
+              dailyDataComplete &&
               authorization.data &&
               !authorization.data.authorized ? (
                 <p className="mt-4 text-sm text-muted-foreground">

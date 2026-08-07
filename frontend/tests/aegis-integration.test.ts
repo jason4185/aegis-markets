@@ -39,6 +39,11 @@ import {
 } from "../src/lib/aegis/transaction-storage";
 import { normalizeAegisError } from "../src/lib/aegis/errors";
 import { AEGIS_METHODS } from "../src/lib/aegis/contract-schema";
+import {
+  isDailySettlementProcessable,
+  settlementAvailabilityMessage,
+  settlementDateAvailability,
+} from "../src/lib/aegis/settlement-time";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as Address;
 const OTHER = "0x2222222222222222222222222222222222222222" as Address;
@@ -544,6 +549,8 @@ describe("write architecture and lifecycle", () => {
     expect(settleSection).toContain("canSettleProtection");
     expect(settleSection).toContain("authorization.authorized");
     expect(settleSection).toContain('throw new Error("UNAUTHORIZED_CALLER")');
+    expect(settleSection).toContain("isDailySettlementProcessable");
+    expect(settleSection).toContain('throw new Error("SETTLEMENT_DATA_NOT_READY")');
     expect(settleSection).toContain("aegisKeys.dashboard(details.owner)");
   });
 
@@ -583,6 +590,47 @@ describe("write architecture and lifecycle", () => {
   });
 });
 
+describe("UTC settlement availability", () => {
+  it("processes only dates strictly before the current UTC calendar date", () => {
+    const midday = new Date("2026-08-07T12:00:00.000Z");
+    expect(isDailySettlementProcessable("2026-08-06", midday)).toBe(true);
+    expect(isDailySettlementProcessable("2026-08-07", midday)).toBe(false);
+    expect(isDailySettlementProcessable("2026-08-08", midday)).toBe(false);
+  });
+
+  it("uses UTC rather than the browser's local timezone near midnight", () => {
+    expect(isDailySettlementProcessable("2026-08-07", new Date("2026-08-08T04:59:59.999Z"))).toBe(
+      true,
+    );
+    expect(isDailySettlementProcessable("2026-08-08", new Date("2026-08-08T00:00:00.000Z"))).toBe(
+      false,
+    );
+    expect(isDailySettlementProcessable("2026-08-07", new Date("2026-08-08T00:00:00.000Z"))).toBe(
+      true,
+    );
+    expect(isDailySettlementProcessable("2026-08-07", new Date("2026-08-07T23:59:59.999Z"))).toBe(
+      false,
+    );
+  });
+
+  it("rejects malformed and empty settlement dates", () => {
+    const now = new Date("2026-08-07T12:00:00.000Z");
+    expect(isDailySettlementProcessable("", now)).toBe(false);
+    expect(isDailySettlementProcessable("2026-8-07", now)).toBe(false);
+    expect(isDailySettlementProcessable("2026-02-30", now)).toBe(false);
+    expect(settlementDateAvailability("", now)).toBe("invalid");
+  });
+
+  it("explains when today's daily data becomes processable", () => {
+    const now = new Date("2026-08-07T12:00:00.000Z");
+    expect(settlementAvailabilityMessage("2026-08-07", now)).toBe(
+      "Daily market data is still being finalized. Available to settle after 00:00 UTC on 2026-08-08.",
+    );
+    expect(settlementAvailabilityMessage("2026-08-06", now)).toBeNull();
+    expect(settlementAvailabilityMessage("2026-08-08", now)).toBeNull();
+  });
+});
+
 describe("route states and production data", () => {
   it("has the required disconnected and zero-protection dashboard states", async () => {
     const dashboard = await source("../src/routes/dashboard.tsx");
@@ -611,6 +659,9 @@ describe("route states and production data", () => {
   it("shows settlement only after readiness and contract authorization", async () => {
     const details = await source("../src/routes/protection.$id.tsx");
     expect(details).toContain("authorization.data?.authorized");
+    expect(details).toContain("dailyDataComplete");
+    expect(details).toContain("Available after daily close");
+    expect(details).toContain("settlementAvailabilityMessage");
     expect(details).toContain("You are not authorized to settle this protection.");
     expect(details).toContain("next_unresolved_settlement_date");
     expect(details).not.toContain('type="date"');

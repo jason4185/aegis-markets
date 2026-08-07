@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowRight, ShieldPlus } from "lucide-react";
@@ -21,6 +21,7 @@ import { formatDate, formatGen, formatPrice } from "@/lib/aegis/format";
 import { aegisKeys } from "@/lib/aegis/query-keys";
 import type { ContractStatus, ProtectionCard } from "@/lib/aegis/types";
 import { useWalletState } from "@/hooks/use-wallet-state";
+import { isDailySettlementProcessable } from "@/lib/aegis/settlement-time";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "My Protections — Aegis Markets" }] }),
@@ -40,6 +41,11 @@ const FILTERS: { id: Filter; label: string }[] = [
 function Dashboard() {
   const wallet = useWalletState();
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const address = wallet.address;
   const summary = useQuery({
     queryKey: aegisKeys.dashboard(address),
@@ -86,7 +92,14 @@ function Dashboard() {
   });
   const readyIds = new Set(
     readinessQueries.flatMap((query, index) =>
-      query.data?.ready && allProtections[index] ? [allProtections[index].id.toString()] : [],
+      query.data?.ready &&
+      allProtections[index] &&
+      isDailySettlementProcessable(
+        detailQueries[index]?.data?.next_unresolved_settlement_date ?? "",
+        now,
+      )
+        ? [allProtections[index].id.toString()]
+        : [],
     ),
   );
   const filtered = allProtections.filter((item) =>

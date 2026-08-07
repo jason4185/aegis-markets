@@ -36,6 +36,8 @@ const CONTRACT_MESSAGES: Record<string, string> = {
   MISSING_SOURCE_RATE: "A required market rate was missing from the source response.",
   INVALID_SOURCE_TIMESTAMP: "The purchase reference timestamp could not be verified.",
   INVALID_ADDRESS: "The wallet address is invalid.",
+  SETTLEMENT_DATA_NOT_READY:
+    "Daily market data is still being finalized. Try again after the next UTC day begins.",
 };
 
 function errorText(error: unknown) {

@@ -24,6 +24,7 @@ import { aegisKeys } from "./query-keys";
 import type { Duration, MarketId, Threshold, TransactionProgress } from "./types";
 import type { ActiveWalletConnector, Eip1193Provider, WriteContext } from "@/lib/web3/wallet";
 import { explorerTransactionUrl } from "@/lib/web3/chains";
+import { isDailySettlementProcessable } from "./settlement-time";
 
 type ContractArg = string | number | bigint | boolean;
 type ProgressCallback = (progress: TransactionProgress) => void;
@@ -424,6 +425,9 @@ export async function settleProtection({
   const details = await getProtectionDetails(protectionId, context.address);
   const settlementDate = details.next_unresolved_settlement_date;
   if (!settlementDate) throw new Error("INVALID_SETTLEMENT_DATE");
+  if (!isDailySettlementProcessable(settlementDate)) {
+    throw new Error("SETTLEMENT_DATA_NOT_READY");
+  }
   const [readiness, authorization] = await Promise.all([
     getSettlementReadiness(protectionId, settlementDate, context.address),
     canSettleProtection(context.address, protectionId),
@@ -431,6 +435,9 @@ export async function settleProtection({
   if (!authorization.authorized) throw new Error("UNAUTHORIZED_CALLER");
   if (!readiness.ready || readiness.settlement_date !== settlementDate) {
     throw new Error("INVALID_SETTLEMENT_DATE");
+  }
+  if (!isDailySettlementProcessable(settlementDate)) {
+    throw new Error("SETTLEMENT_DATA_NOT_READY");
   }
   const transaction = await writeAegisContract({
     context,
