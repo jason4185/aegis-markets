@@ -53,17 +53,20 @@ reserves its complete payout.
 `settle_protection` handles one protection/date pair in a single write. The
 contract owner and approved operators may settle any protection; a protection
 owner may settle only their own. It validates authorization before external
-work, validates the D+1 coverage window, reuses an existing finalized
-market settlement when available, or obtains two-source consensus and stores a
-new market-settlement version. It then compares each price independently with
-the protection trigger. A confirmed breach moves the protection to
-`CLAIMABLE`; otherwise the result is `NOT_BREACHED` or `INCONCLUSIVE`.
+work, requires a completed UTC day and the protection's earliest unresolved
+date, then reuses existing market/date evidence or obtains two-source consensus
+and stores a new market-settlement version. These ordering guards run before
+cached evidence or external web requests are used. It then compares each price
+independently with the protection trigger. A confirmed breach moves the
+protection to `CLAIMABLE`; otherwise the result is `NOT_BREACHED` or
+`INCONCLUSIVE`.
 
 Once a protection/date receives a conclusive `BREACHED` or `NOT_BREACHED`
 result, that protection/date result is final. New market-settlement versions
 are used only to retry results that were previously `INCONCLUSIVE`. A newer
 version updates the stored evidence version and adjusts counters only if it
-resolves the split.
+resolves the split. An `INCONCLUSIVE` date remains unresolved and blocks later
+dates until it is retried successfully.
 
 The final required `NOT_BREACHED` result expires an active protection and
 releases its reserve immediately. `expires_at` remains informational metadata;

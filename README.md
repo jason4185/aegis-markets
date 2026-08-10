@@ -7,7 +7,7 @@
 | Deployment       | Current value                                                                                                                             |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Network          | GenLayer Bradbury                                                                                                                         |
-| Contract         | [`0xe44E5B93baCF3da55840b452D5274e175214C19D`](https://explorer-bradbury.genlayer.com/address/0xe44E5B93baCF3da55840b452D5274e175214C19D) |
+| Contract         | [`0x897C6a6544D29c8111239c6888828CFAcbe8db04`](https://explorer-bradbury.genlayer.com/address/0x897C6a6544D29c8111239c6888828CFAcbe8db04) |
 | Wallets          | Installed EVM-compatible browser wallets                                                                                                  |
 | Contract version | `1.0.0`                                                                                                                                   |
 
@@ -85,6 +85,10 @@ separating the ability to keep a protection moving from the right to receive its
 When the two settlement sources disagree, the date remains unresolved and can be retried under
 the contract's versioning rules instead of being finalized from unsupported evidence.
 
+Reusable validator-approved settlement evidence is stored by market and date. A retryable
+inconclusive case may create a newer settlement version, while each protection remains tied to
+the version it used. A conclusive protection/date result remains final.
+
 ## Technical Pillars
 
 ### Consensus-gated external data
@@ -139,11 +143,15 @@ A settlement date represents the UTC market day being evaluated. Daily settlemen
 is determined in UTC, after that day has closed. For example, a protection purchased on 6 Aug
 has 7 Aug as its first stored settlement date; 7 Aug data becomes available to settle after
 00:00 UTC on 8 Aug, and 8 Aug data becomes available after 00:00 UTC on 9 Aug. The frontend
-prevents same-day attempts while the historical daily market data is still being finalized.
+prevents same-day attempts while the historical daily market data is still being finalized, and
+the contract independently enforces that the requested date is strictly earlier than the current
+UTC day. The frontend presents the contract's readiness, keeps blocked actions disabled, and
+submits the exact date; it cannot choose settlement prices or outcomes.
 
 If a date is missed, it remains unresolved rather than being skipped. The oldest unresolved date
 stays next in line, so later dates are handled one at a time in chronological order; processing
-and any resulting payout decision may simply be delayed.
+and any resulting payout decision may simply be delayed. This ordering is enforced by
+`settle_protection`, including when reusable market/date evidence is already cached.
 
 ## UI Tour
 
@@ -399,19 +407,18 @@ and did not revert. It does not wait for a later `FINALIZED` status.
 
 The following results were reproduced against the current working tree.
 
-| Check                                         | Result                                        |
-| --------------------------------------------- | --------------------------------------------- |
-| Contract test suite                           | `124 passed`, `0 failed`                      |
-| Frontend test suite                           | `44 passed`, `0 failed`                       |
-| GenVM lint and semantic validation            | Passed                                        |
-| GenVM schema/ABI extraction                   | Passed: `36` methods (`27` views, `9` writes) |
-| GenVM contract typecheck                      | Passed with no type errors                    |
-| Security and access-control coverage          | Passed within the contract suite              |
-| Lifecycle and settlement-permission coverage  | Passed within the contract suite              |
-| Pool and payout accounting coverage           | Passed within the contract suite              |
-| Pickling and storage round trips              | Passed within the contract suite              |
-| Serialized deployment payload                 | `50,050` bytes                                |
-| Margin below the 52,000-byte deployment limit | `1,950` bytes                                 |
+| Check                                        | Result                                        |
+| -------------------------------------------- | --------------------------------------------- |
+| Contract test suite                          | `133 passed`, `0 failed`, `0 skipped`         |
+| Frontend test suite                          | `54 passed`, `0 failed`                       |
+| GenVM lint and semantic validation           | Passed                                        |
+| GenVM schema/ABI extraction                  | Passed: `36` methods (`27` views, `9` writes) |
+| GenVM contract typecheck                     | Passed with no type errors                    |
+| Security and access-control coverage         | Passed within the contract suite              |
+| Lifecycle and settlement-permission coverage | Passed within the contract suite              |
+| Pool and payout accounting coverage          | Passed within the contract suite              |
+| Pickling and storage round trips             | Passed within the contract suite              |
+| Current contract source size                 | `51,828` bytes (source only; not payload)     |
 
 Tests use deterministic source mocks where external market-data behavior must be reproduced.
 They cover source validation, permission checks, operator swap-and-pop storage, settlement
@@ -423,7 +430,7 @@ retries, duplicate-call safety, lifecycle counters, and reserve accounting.
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Network          | GenLayer Bradbury                                                                                                                         |
 | Chain ID         | `4221`                                                                                                                                    |
-| Contract         | [`0xe44E5B93baCF3da55840b452D5274e175214C19D`](https://explorer-bradbury.genlayer.com/address/0xe44E5B93baCF3da55840b452D5274e175214C19D) |
+| Contract         | [`0x897C6a6544D29c8111239c6888828CFAcbe8db04`](https://explorer-bradbury.genlayer.com/address/0x897C6a6544D29c8111239c6888828CFAcbe8db04) |
 | RPC              | [https://rpc-bradbury.genlayer.com](https://rpc-bradbury.genlayer.com)                                                                    |
 | Explorer         | [https://explorer-bradbury.genlayer.com](https://explorer-bradbury.genlayer.com)                                                          |
 | Contract version | `1.0.0`                                                                                                                                   |

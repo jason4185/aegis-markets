@@ -71,7 +71,7 @@ describe("Bradbury configuration", () => {
     expect(BRADBURY_CHAIN_ID).toBe(4221);
     expect(BRADBURY_RPC_URL).toBe("https://rpc-bradbury.genlayer.com");
     expect(BRADBURY_EXPLORER_URL).toBe("https://explorer-bradbury.genlayer.com");
-    expect(AEGIS_PROTECTION_ADDRESS).toBe("0xe44E5B93baCF3da55840b452D5274e175214C19D");
+    expect(AEGIS_PROTECTION_ADDRESS).toBe("0x897C6a6544D29c8111239c6888828CFAcbe8db04");
     expect(AEGIS_OWNER_ADDRESS).toBe("0xC8Ba5DA455b011863F2ECa76a6fa21E62Cc91B87");
     expect(aegisConfig.networkName).toBe("GenLayer Bradbury");
   });

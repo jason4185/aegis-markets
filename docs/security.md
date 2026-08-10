@@ -11,6 +11,15 @@ cannot settle. Only the stored protection owner may claim its payout.
 Pause is intentionally purchase-only. It does not block settlement,
 expiration, claims, or pool reads.
 
+## Settlement guards
+
+`settle_protection` is the security boundary for settlement timing and order.
+The requested date must be strictly earlier than the current UTC day and must
+match the protection's earliest unresolved date. An `INCONCLUSIVE` date remains
+unresolved, blocks later dates, and can be retried. These checks run before
+cached market evidence, external web requests, or settlement-state mutation,
+so direct contract callers cannot bypass the frontend's readiness safeguards.
+
 ## Consensus and source validation
 
 Web operations use a custom comparative validator. Validators independently

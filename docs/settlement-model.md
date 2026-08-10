@@ -59,11 +59,12 @@ settlement is stored, so an authorized caller can retry. A current-day 404
 is transient because that day's value may be published later; an older missing
 date remains an external failure.
 
-The first successful `settle_protection` call for a market/date stores a
-finalized `MarketSettlement`, which other protections reuse. It contains
-evidence prices, not a universal breach result, because protections can have
-different triggers. An inconclusive protection/date may permit a newer
-market-settlement version without overwriting previously finalized evidence.
+The first successful `settle_protection` call for a market/date stores
+validator-approved evidence that other eligible protections can reuse. It
+contains prices, not a universal breach result, because protections can have
+different triggers. A retryable inconclusive case may create a newer
+market-settlement version without overwriting previously finalized evidence;
+each protection/date records the version it used.
 
 ## Date eligibility and expiry
 
@@ -79,11 +80,16 @@ The final required `NOT_BREACHED` result expires the protection immediately;
 there is no manual expiry method. Weekends are eligible. Historical settlement
 may occur later, but must use the originally requested eligible date.
 
-A settlement date may equal the current transaction calendar date; only future
-dates are rejected. Both sources must already return the exact requested date,
-so no previous-day value can substitute for an unpublished current-day value.
-Daily values are “dated daily reference prices published for the settlement
-date,” not guaranteed universal official closes.
+Settlement requires a completed UTC market day: `settlement_day` must be
+strictly earlier than the current transaction UTC day. A protection must also
+settle its earliest unresolved date, so a later date cannot bypass an earlier
+unprocessed or `INCONCLUSIVE` date, even when later market/date evidence is
+cached. These guards run inside `settle_protection` before external web calls
+or settlement-state mutation. A 7 Aug market day therefore becomes processable
+after 00:00 UTC on 8 Aug. Both sources must already return the exact requested
+date, so no previous-day value can substitute for an unpublished current-day
+value. Daily values are “dated daily reference prices published for the
+settlement date,” not guaranteed universal official closes.
 
 ## Two-source outcome
 
@@ -92,7 +98,7 @@ markets, each price at or above the trigger is breached.
 
 - both breached: `BREACHED` and policy becomes `CLAIMABLE`;
 - both not breached: `NOT_BREACHED`, with the final required date expiring immediately;
-- split: `INCONCLUSIVE`, remaining active until retry;
+- split: `INCONCLUSIVE`, remaining unresolved and blocking later dates until retry;
 - unavailable/malformed required evidence: retryable failure before storage.
 
 Prices are not averaged and no tolerance affects payout. Validator consensus
@@ -102,5 +108,5 @@ prevent other market settlements or protections from being settled.
 Once a protection/date receives a conclusive `BREACHED` or `NOT_BREACHED`
 result, that protection/date result is final. New market-settlement versions are
 used only to retry protection/date results that were previously `INCONCLUSIVE`.
-The stored protection-settlement version identifies the exact finalized market
-settlement used. Repeated conclusive calls do not refetch or change counters.
+The stored protection-settlement version identifies the exact evidence used.
+Repeated conclusive calls do not refetch or change counters.
