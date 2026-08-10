@@ -247,6 +247,83 @@ describe("bigint-safe contract mapping", () => {
     expect(readiness.reason_code).toBe("READY");
   });
 
+  it("maps blocked settlement-day and settlement-order readiness states", () => {
+    const base = {
+      protection_id: 0,
+      market_id: "GBP_USD",
+      settlement_date: "2026-08-07",
+      settlement_day: 1,
+      current_utc_day: 1,
+      inside_protection_window: true,
+      is_future_date: false,
+      protection_status: "ACTIVE",
+      previous_result: "UNPROCESSED",
+      market_settlement_exists: false,
+      market_settlement_finalized: false,
+      market_settlement_version: 0,
+      retryable: false,
+      ready: false,
+    };
+    expect(
+      mapSettlementReadiness({ ...base, reason_code: "SETTLEMENT_DAY_NOT_COMPLETE" }),
+    ).toMatchObject({ ready: false, reason_code: "SETTLEMENT_DAY_NOT_COMPLETE" });
+    expect(mapSettlementReadiness({ ...base, reason_code: "SETTLEMENT_ORDER" })).toMatchObject({
+      ready: false,
+      reason_code: "SETTLEMENT_ORDER",
+    });
+  });
+
+  it("preserves enabled readiness states", () => {
+    const base = {
+      protection_id: 0,
+      market_id: "GBP_USD",
+      settlement_date: "2026-08-07",
+      settlement_day: 1,
+      current_utc_day: 2,
+      inside_protection_window: true,
+      is_future_date: false,
+      protection_status: "ACTIVE",
+      previous_result: "UNPROCESSED",
+      market_settlement_exists: true,
+      market_settlement_finalized: true,
+      market_settlement_version: 1,
+      retryable: false,
+      ready: true,
+    };
+    for (const reason_code of [
+      "READY",
+      "MARKET_SETTLEMENT_AVAILABLE",
+      "MARKET_SETTLEMENT_RETRYABLE",
+    ] as const) {
+      expect(mapSettlementReadiness({ ...base, reason_code })).toMatchObject({
+        ready: true,
+        reason_code,
+      });
+    }
+  });
+
+  it("rejects unknown settlement readiness reason codes", () => {
+    expect(() =>
+      mapSettlementReadiness({
+        protection_id: 0,
+        market_id: "GBP_USD",
+        settlement_date: "2026-08-07",
+        settlement_day: 1,
+        current_utc_day: 1,
+        inside_protection_window: true,
+        is_future_date: false,
+        protection_status: "ACTIVE",
+        previous_result: "UNPROCESSED",
+        market_settlement_exists: false,
+        market_settlement_finalized: false,
+        market_settlement_version: 0,
+        retryable: false,
+        ready: false,
+        reason_code: "UNKNOWN_REASON",
+      }),
+    ).toThrow("reason_code");
+  });
+
   it("maps owner, operator, protection-owner and unrelated authorization results", () => {
     expect(
       mapSettlementAuthorization({
@@ -551,6 +628,8 @@ describe("write architecture and lifecycle", () => {
     expect(settleSection).toContain('throw new Error("UNAUTHORIZED_CALLER")');
     expect(settleSection).toContain("isDailySettlementProcessable");
     expect(settleSection).toContain('throw new Error("SETTLEMENT_DATA_NOT_READY")');
+    expect(settleSection).toContain("args: [protectionId, settlementDate]");
+    expect(settleSection).toContain("readiness.ready");
     expect(settleSection).toContain("aegisKeys.dashboard(details.owner)");
   });
 
@@ -664,6 +743,11 @@ describe("route states and production data", () => {
     expect(details).toContain("settlementAvailabilityMessage");
     expect(details).toContain("You are not authorized to settle this protection.");
     expect(details).toContain("next_unresolved_settlement_date");
+    expect(details).toContain("SETTLEMENT_DAY_NOT_COMPLETE");
+    expect(details).toContain("SETTLEMENT_ORDER");
+    expect(details).toContain("Daily market data is still being finalized.");
+    expect(details).toContain("An earlier settlement date must be completed first.");
+    expect(details).toContain("readiness.data?.ready");
     expect(details).not.toContain('type="date"');
   });
 

@@ -55,6 +55,8 @@ const READINESS_MESSAGES: Record<string, string> = {
   MARKET_SETTLEMENT_AVAILABLE: "Verified market data is available for this date.",
   MARKET_SETTLEMENT_RETRYABLE:
     "The previous result was inconclusive. Try this settlement date again later.",
+  SETTLEMENT_DAY_NOT_COMPLETE: "Daily market data is still being finalized.",
+  SETTLEMENT_ORDER: "An earlier settlement date must be completed first.",
   FUTURE_SETTLEMENT_DATE: "This settlement date is not eligible yet.",
   DATE_ALREADY_SETTLED: "This settlement date is already complete.",
   PROTECTION_CLAIMABLE: "Protection is now claimable.",
@@ -318,10 +320,16 @@ function ProtectionPage() {
                   !wallet.isWrongNetwork &&
                   details.data.status === "ACTIVE" &&
                   Boolean(nextDate) &&
-                  readiness.data?.ready &&
                   authorization.data?.authorized &&
-                  !dailyDataComplete ? (
-                  <Button disabled>Available after daily close</Button>
+                  readiness.data &&
+                  (!readiness.data.ready || !dailyDataComplete) ? (
+                  <Button disabled>
+                    {!dailyDataComplete
+                      ? "Available after daily close"
+                      : readiness.data.reason_code === "SETTLEMENT_ORDER"
+                        ? "Complete earlier settlement date first"
+                        : "Settlement unavailable"}
+                  </Button>
                 ) : null}
                 {canClaim && !wallet.isWrongNetwork ? (
                   <Button onClick={() => void runAction("claim")}>

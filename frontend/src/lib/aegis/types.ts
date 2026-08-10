@@ -130,6 +130,8 @@ export interface ProtectionDetails extends ProtectionCard {
 export type SettlementReadinessCode =
   | "INVALID_SETTLEMENT_DATE"
   | "FUTURE_SETTLEMENT_DATE"
+  | "SETTLEMENT_DAY_NOT_COMPLETE"
+  | "SETTLEMENT_ORDER"
   | "DATE_ALREADY_SETTLED"
   | "PROTECTION_CLAIMABLE"
   | "PROTECTION_EXPIRED"
