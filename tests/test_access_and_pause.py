@@ -77,14 +77,16 @@ def test_unsupported_market_rejected_everywhere():
     )
 
 
-def test_settlement_allows_today_and_rejects_future_date():
+def test_settlement_rejects_today_and_future_date():
     contract = deploy()
     fund(contract)
     protection_id = purchase(contract)
     mock_settlement("2026-06-02")
     set_context(ALICE, 0, "2026-06-02T12:00:00Z")
-    assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
+    assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-02"))
     assert_error(
         C.E_INVALID_DATE,
         lambda: contract.settle_protection(protection_id, "2026-06-03"),
     )
+    set_context(ALICE, 0, "2026-06-03T12:00:00Z")
+    assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"

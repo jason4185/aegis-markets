@@ -149,10 +149,11 @@ def test_http_500_is_transient_and_not_stored():
     assert not contract.market_settlements
 
 
-def test_current_day_missing_fawaz_writes_no_state_then_retries():
+def test_current_day_settlement_rejects_before_external_requests():
     contract, protection_id = policy()
+    C.gl.nondet.web.clear()
     assert_error(
-        C.T_SOURCE_UNAVAILABLE,
+        C.E_INVALID_DATE,
         lambda: settle(
             contract, protection_id, now="2026-06-02T12:00:00Z",
             primary_status=404, fallback_status=404,
@@ -162,9 +163,7 @@ def test_current_day_missing_fawaz_writes_no_state_then_retries():
     assert not contract.market_settlements
     assert contract.settlement_versions.get(key) is None
     assert contract.get_protection_settlement_result(protection_id, "2026-06-02") == "UNPROCESSED"
-    C.gl.nondet.web.clear()
-    assert settle(contract, protection_id, now="2026-06-02T18:00:00Z") == "NOT_BREACHED"
-    assert contract.get_market_settlement("GBP_USD", "2026-06-02")["version"] == 1
+    assert C.gl.nondet.web.requests == []
 
 
 def test_older_missing_fawaz_is_external():
@@ -180,7 +179,7 @@ def test_previous_day_data_cannot_settle_requested_current_day():
     contract, protection_id = policy()
     previous = '{"date":"2026-06-01","usd":{"gbp":0.8,"jpy":150,"try":32,"xau":0.0005,"xag":0.04}}'
     assert_error(
-        C.X_MALFORMED,
+        C.E_INVALID_DATE,
         lambda: settle(
             contract, protection_id, now="2026-06-02T12:00:00Z",
             primary_body=previous, fallback_body=previous,
@@ -288,6 +287,7 @@ def test_purchase_day_future_day_and_window_bounds():
     assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-01"))
     assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-03"))
     mock_settlement("2026-06-02")
+    set_context(ALICE, 0, "2026-06-03T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
     set_context(ALICE, 0, "2026-06-20T12:00:00Z")
     assert_error(C.E_INVALID_DATE, lambda: contract.settle_protection(protection_id, "2026-06-09"))

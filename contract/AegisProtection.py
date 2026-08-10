@@ -577,6 +577,14 @@ class AegisProtection(gl.Contract):
             version = 1
         return (self.market_settlements.get(_versioned_settlement_key(base_key, version)), version)
 
+    def _next_unresolved_date(self, protection_id, item):
+        for offset in range(int(item.duration_days)):
+            date = _day_date(int(item.first_settlement_day) + offset)
+            value = self.protection_settlement_results.get(_protection_settlement_key(int(protection_id), date), 'UNPROCESSED')
+            if value == 'UNPROCESSED' or value == 'INCONCLUSIVE':
+                return date
+        return ''
+
     def _protection_card(self, protection_id, item):
         (symbol, category, direction, _, _) = _market(item.market_id)
         processed = int(item.processed_dates)
@@ -767,13 +775,15 @@ class AegisProtection(gl.Contract):
         key = _market_settlement_key(item.market_id, settlement_date)
         (stored, version) = self._current_market_settlement(key)
         future = valid and day > today
+        completed = valid and day < today
         inside = valid and (day >= int(item.first_settlement_day) and day <= int(item.last_settlement_day))
+        earliest = self._next_unresolved_date(number, item) if valid and inside else ''
         retryable = self.settlement_retryable.get(key, False)
         ready = False
         if not valid:
             reason = 'INVALID_SETTLEMENT_DATE'
-        elif future:
-            reason = 'FUTURE_SETTLEMENT_DATE'
+        elif not completed:
+            reason = 'SETTLEMENT_DAY_NOT_COMPLETE'
         elif not inside:
             reason = 'INVALID_SETTLEMENT_DATE'
         elif previous == 'BREACHED' or previous == 'NOT_BREACHED':
@@ -784,6 +794,8 @@ class AegisProtection(gl.Contract):
             reason = 'PROTECTION_EXPIRED'
         elif item.status != 'ACTIVE':
             reason = 'PROTECTION_NOT_ACTIVE'
+        elif earliest != settlement_date:
+            reason = 'SETTLEMENT_ORDER'
         elif previous == 'INCONCLUSIVE' and retryable:
             ready = True
             reason = 'MARKET_SETTLEMENT_RETRYABLE'
@@ -952,7 +964,7 @@ class AegisProtection(gl.Contract):
             _user_error(E_UNAUTHORIZED)
         now = _transaction_time()
         settlement_day = _date_day(settlement_date, E_INVALID_DATE)
-        if settlement_day > now // DAY_SECONDS:
+        if settlement_day >= now // DAY_SECONDS:
             _user_error(E_INVALID_DATE)
         if settlement_day < int(item.first_settlement_day) or settlement_day > int(item.last_settlement_day):
             _user_error(E_INVALID_DATE)
@@ -965,6 +977,8 @@ class AegisProtection(gl.Contract):
             return previous
         if item.status != 'ACTIVE':
             _user_error(E_NOT_ACTIVE)
+        if self._next_unresolved_date(number, item) != settlement_date:
+            _user_error(E_INVALID_DATE)
         skey = _market_settlement_key(item.market_id, settlement_date)
         (settlement, version) = self._current_market_settlement(skey)
         prior_version = int(self.protection_settlement_versions.get(rkey, u16(0)))

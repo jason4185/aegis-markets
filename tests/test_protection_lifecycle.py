@@ -111,6 +111,8 @@ def _process_all_expiry_dates(inconclusive_date=""):
             fawaz_rates={"gbp": "0.8", "jpy": "150", "try": "32", "xau": "0.0005", "xag": "0.04"},
         )
         contract.settle_protection(protection_id, date)
+        if date == inconclusive_date:
+            break
     return contract, protection_id
 
 
@@ -122,11 +124,10 @@ def _complete_before_expiry():
         "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05",
         "2026-06-06", "2026-06-07", "2026-06-08",
     )
-    set_context(ALICE, 0, "2026-06-08T12:00:00Z")
+    set_context(ALICE, 0, "2026-06-09T12:00:00Z")
     for date in dates:
         mock_settlement(date)
         assert contract.settle_protection(protection_id, date) == "NOT_BREACHED"
-    assert C._transaction_time() < contract.get_protection(protection_id)["expires_at"]
     assert contract.get_protection(protection_id)["status"] == "EXPIRED"
     return contract, protection_id
 
@@ -148,7 +149,7 @@ def test_repeated_final_not_breached_auto_expires_once_without_refetch():
     assert owner_before["active_count"] == 0 and owner_before["expired_count"] == 1
 
     gl.nondet.web.clear()
-    set_context(ALICE, 0, "2026-06-08T23:59:59Z")
+    set_context(ALICE, 0, "2026-06-09T00:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-08") == "NOT_BREACHED"
     assert contract.get_protection(protection_id)["status"] == "EXPIRED"
     assert contract.get_protocol_stats() == before
@@ -175,7 +176,7 @@ def test_inconclusive_date_never_counts_toward_expiry():
     contract, protection_id = _process_all_expiry_dates("2026-06-02")
     item = contract.get_protection(protection_id)
     assert item["status"] == "ACTIVE"
-    assert item["processed_dates"] == 6
+    assert item["processed_dates"] == 0
     assert item["inconclusive_dates"] == 1
     assert item["reserve_released"] is False
     assert contract.get_pool_state()["reserved_liability"] == 2 * GEN
@@ -187,6 +188,9 @@ def test_resolving_the_last_inconclusive_date_allows_expiry():
     mock_settlement("2026-06-02")
     set_context(ALICE, 0, "2026-06-11T12:00:00Z")
     assert contract.settle_protection(protection_id, "2026-06-02") == "NOT_BREACHED"
+    for date in ("2026-06-03", "2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07", "2026-06-08"):
+        mock_settlement(date)
+        assert contract.settle_protection(protection_id, date) == "NOT_BREACHED"
     item = contract.get_protection(protection_id)
     assert item["status"] == "EXPIRED"
     assert item["processed_dates"] == 7
@@ -291,9 +295,9 @@ def test_protection_details_readiness_and_history_are_deterministic_reads():
     assert details["next_unresolved_settlement_date"] == "2026-06-02"
     assert details["latest_settlement_result"] == "UNPROCESSED"
     ready = contract.get_settlement_readiness(protection_id, "2026-06-02")
-    assert ready["ready"] is True and ready["reason_code"] == "READY"
+    assert ready["ready"] is False and ready["reason_code"] == "SETTLEMENT_DAY_NOT_COMPLETE"
     future = contract.get_settlement_readiness(protection_id, "2026-06-03")
-    assert future["ready"] is False and future["reason_code"] == "FUTURE_SETTLEMENT_DATE"
+    assert future["ready"] is False and future["reason_code"] == "SETTLEMENT_DAY_NOT_COMPLETE"
     history = contract.get_settlement_history(protection_id, 0, 7)
     assert len(history) == 7
     assert history[0]["settlement_date"] == "2026-06-02"
