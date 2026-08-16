@@ -220,6 +220,9 @@ function completionMessage(method?: string) {
   if (method === "claim_payout") {
     return "Your payout was received successfully.";
   }
+  if (method === "terminal_cancel_protection") {
+    return "Protection cancelled and original premium refunded.";
+  }
   if (method === "add_settlement_operator" || method === "remove_settlement_operator") {
     return "The operator update was completed successfully.";
   }

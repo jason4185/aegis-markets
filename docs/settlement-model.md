@@ -110,3 +110,19 @@ result, that protection/date result is final. New market-settlement versions are
 used only to retry protection/date results that were previously `INCONCLUSIVE`.
 The stored protection-settlement version identifies the exact evidence used.
 Repeated conclusive calls do not refetch or change counters.
+
+Historical source corrections do not retroactively alter a protection/date that
+has already reached a conclusive BREACHED or NOT_BREACHED result. Revised source
+evidence may only be considered while that protection/date remains unresolved or
+INCONCLUSIVE. A retry of an INCONCLUSIVE date may bind that protection/date to a
+newer evidence version; once the retry is conclusive, that result is immutable.
+
+If the earliest unresolved settlement date remains unresolved beyond the 3-day
+terminal grace period, an authorized caller may terminally cancel the ACTIVE
+protection. The payout reserve is released and the original premium is refunded
+to the protection owner. The eligibility condition is
+`current_utc_day > settlement_day + 3`. The stored
+`DATA_UNAVAILABLE_OR_CONFLICTING` value is an umbrella terminal-resolution reason meaning that
+the earliest required settlement date remained unresolved through the grace period; it does not
+prove a specific source failure, source disagreement, or lack of settlement attempt. The
+cancellation path is deterministic and does not fetch either settlement source again.

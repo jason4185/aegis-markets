@@ -367,7 +367,7 @@ def test_contract_contains_no_dynamic_array_storage_and_is_under_limit():
     source = CONTRACT_PATH.read_text()
     forbidden = "Dyn" + "Array"
     assert forbidden not in source
-    assert CONTRACT_PATH.stat().st_size < 52_000
+    assert CONTRACT_PATH.stat().st_size < 56_000
 
 
 def test_schema_extraction_and_abi_method_names():
@@ -377,7 +377,7 @@ def test_schema_extraction_and_abi_method_names():
     )
     schema = json.loads(completed.stdout)["schema"]
     methods = schema["methods"]
-    assert len(methods) == 36
+    assert len(methods) == 38
     assert methods["purchase_protection"]["payable"] is True
     assert methods["purchase_protection"]["params"][2][0] == "event_percent"
     assert methods["quote_protection"]["params"][1][0] == "event_percent"
@@ -385,6 +385,8 @@ def test_schema_extraction_and_abi_method_names():
     assert methods["get_protection"]["readonly"] is True
     assert "claim_payout" in methods
     assert "settle_protection" in methods
+    assert methods["terminal_cancel_protection"]["params"] == [["protection_id", "int"]]
+    assert methods["get_terminal_cancellation_readiness"]["readonly"] is True
     assert "finalize_expired_protection" not in methods
     for name in (
         "add_settlement_operator", "remove_settlement_operator",
@@ -418,7 +420,7 @@ def test_schema_extraction_and_abi_method_names():
     writes = {name for name, item in methods.items() if not item["readonly"]}
     assert writes == {
         "add_pool_funds", "withdraw_unreserved_gen", "purchase_protection",
-        "settle_protection", "claim_payout", "pause_purchases",
+        "settle_protection", "terminal_cancel_protection", "claim_payout", "pause_purchases",
         "unpause_purchases", "add_settlement_operator",
         "remove_settlement_operator",
     }

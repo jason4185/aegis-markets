@@ -7,7 +7,7 @@
 | Deployment       | Current value                                                                                                                             |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Network          | GenLayer Bradbury                                                                                                                         |
-| Contract         | [`0x897C6a6544D29c8111239c6888828CFAcbe8db04`](https://explorer-bradbury.genlayer.com/address/0x897C6a6544D29c8111239c6888828CFAcbe8db04) |
+| Contract         | [`0x50C0073170f9de34e57227739441A153af2f5f84`](https://explorer-bradbury.genlayer.com/address/0x50C0073170f9de34e57227739441A153af2f5f84) |
 | Wallets          | Installed EVM-compatible browser wallets                                                                                                  |
 | Contract version | `1.0.0`                                                                                                                                   |
 
@@ -80,7 +80,7 @@ Protection owners can settle their own eligible protections, while the contract 
 approved operators can settle any protection. Only the protection owner can claim a payout,
 separating the ability to keep a protection moving from the right to receive its funds.
 
-### Retryable inconclusive dates
+### Retryable inconclusive dates and terminal cancellation
 
 When the two settlement sources disagree, the date remains unresolved and can be retried under
 the contract's versioning rules instead of being finalized from unsupported evidence.
@@ -88,6 +88,23 @@ the contract's versioning rules instead of being finalized from unsupported evid
 Reusable validator-approved settlement evidence is stored by market and date. A retryable
 inconclusive case may create a newer settlement version, while each protection remains tied to
 the version it used. A conclusive protection/date result remains final.
+
+Historical source corrections do not retroactively alter a protection/date that has already
+reached a conclusive BREACHED or NOT_BREACHED result. Revised source evidence may only be
+considered while that protection/date remains unresolved or INCONCLUSIVE.
+
+If the earliest unresolved settlement date remains unresolved beyond the 3-day terminal grace
+period, an authorized caller may terminally cancel the ACTIVE protection. The payout reserve is
+released and the original premium is refunded to the protection owner. This deterministic escape
+path does not fetch market data again.
+
+Terminal cancellation is available to the protection owner, contract owner, or approved
+settlement operator only after `current_utc_day > settlement_day + 3`. The stored
+`DATA_UNAVAILABLE_OR_CONFLICTING` value is an umbrella terminal-resolution reason meaning that
+the earliest required settlement date remained unresolved through the grace period; it does not
+prove whether the cause was a specific source failure, source disagreement, or no settlement
+attempt. Cancellation releases the reserved payout and refunds the original premium, but does
+not pay the payout.
 
 ## Technical Pillars
 
@@ -111,9 +128,11 @@ reserved funds are released on expiry or paid when the owner claims.
 
 ### Explicit protection lifecycle
 
-The implemented lifecycle is `Active → Payout available → Paid` for a confirmed breach, or
-`Active → Ended` when all required dates complete without one. An inconclusive date stays
-unresolved until a later settlement attempt succeeds.
+The implemented lifecycle is `Active → Payout available → Paid` for a confirmed breach,
+`Active → Ended` when all required dates complete without one, or `Active → Cancelled` when
+the earliest unresolved date remains unresolved through the 3-day terminal grace period. An
+inconclusive date stays unresolved until a later settlement attempt succeeds or authorized
+terminal cancellation is used.
 
 ### Wallet-scoped frontend and transparent reads
 
@@ -152,6 +171,11 @@ If a date is missed, it remains unresolved rather than being skipped. The oldest
 stays next in line, so later dates are handled one at a time in chronological order; processing
 and any resulting payout decision may simply be delayed. This ordering is enforced by
 `settle_protection`, including when reusable market/date evidence is already cached.
+
+When the oldest unresolved date has passed the terminal grace period, the protection detail page
+also reports whether terminal cancellation is ready. Only the protection owner, contract owner,
+or an approved settlement operator can initiate it. The original premium is refunded; the
+released payout reserve is not money paid to the user.
 
 ## UI Tour
 
@@ -265,6 +289,7 @@ stateDiagram-v2
     ACTIVE --> ACTIVE: INCONCLUSIVE
     ACTIVE --> CLAIMABLE: BREACHED
     ACTIVE --> EXPIRED: Final NOT_BREACHED
+    ACTIVE --> CANCELLED: Unresolved through terminal grace period
     CLAIMABLE --> CLAIMED: Owner claims payout
 ```
 
@@ -272,6 +297,8 @@ stateDiagram-v2
 - `CLAIMABLE`: the trigger was confirmed and the payout remains reserved.
 - `CLAIMED`: the protection owner received the payout.
 - `EXPIRED`: every required date completed without a breach.
+- `CANCELLED`: the earliest unresolved date remained unresolved through the 3-day terminal grace
+  period; the payout reserve was released and the original premium was refunded.
 - `INCONCLUSIVE`: the sources disagreed for a date, so that date can be retried.
 
 ## Settlement and Verification
@@ -316,6 +343,7 @@ numerically identical. They must agree on whether the stored trigger was crossed
 | Purchase protection        | Any wallet                          |
 | Settle any protection      | Contract owner or approved operator |
 | Settle personal protection | Protection owner                    |
+| Terminal-cancel protection  | Protection owner, contract owner, or approved operator |
 | Claim payout               | Protection owner                    |
 
 > Settlement can be initiated by the contract owner, an approved operator, or the owner of
@@ -329,6 +357,11 @@ source work for rejected callers.
 The purchase pause affects new purchases only. It does not block settlement or claims. Users
 retain a self-settlement path for their own protections, but someone must initiate each
 settlement transaction.
+
+Terminal cancellation is also caller-triggered. Once the earliest unresolved date is more than
+three UTC days old, the protection owner, contract owner, or approved settlement operator may
+call `terminal_cancel_protection(protection_id)`. The contract derives the date internally,
+releases the payout reserve, and refunds the original premium.
 
 ## Supported Markets
 
@@ -371,18 +404,23 @@ expires immediately and releases that reserve. Accounting checks prevent reserve
 from exceeding the pool balance. The pool is not an investment product and has no depositor
 shares or yield.
 
+`total_premiums_collected` and `owner_premiums_paid` are gross cumulative metrics. Terminal
+refunds reduce `pool_balance` by the refunded premium but do not decrement those historical gross
+totals. Cancelled protections currently have no separate global or owner cancellation counter,
+so the status counters are not intended to partition `total_protections`.
+
 ## Contract Interface
 
-The deployed schema exposes `36` public methods: `27` views and `9` writes.
+The current contract schema exposes `38` public methods: `28` views and `10` writes.
 
 | Group                     | Methods                                                                                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Configuration and markets | `get_config`, `get_supported_markets`, `get_market`, `get_product_terms`, `quote_protection`, `preview_trigger`                                                                |
 | Pool and protocol         | `get_pool_state`, `available_liquidity`, `get_protocol_stats`, `purchases_paused`                                                                                              |
 | Protection reads          | `get_protection`, `get_protection_count`, `get_owned_protection_count`, `get_owned_protection_ids`, `get_my_dashboard_summary`, `get_my_protections`, `get_protection_details` |
-| Settlement reads          | `get_market_settlement`, `get_protection_settlement_result`, `get_protection_settlement_version`, `get_settlement_history`, `get_settlement_readiness`                         |
+| Settlement reads          | `get_market_settlement`, `get_protection_settlement_result`, `get_protection_settlement_version`, `get_settlement_history`, `get_settlement_readiness`, `get_terminal_cancellation_readiness` |
 | Operator reads            | `is_settlement_operator`, `get_settlement_operator_count`, `get_settlement_operator_at`, `get_settlement_operators`, `can_settle_protection`                                   |
-| User writes               | `purchase_protection`, `settle_protection`, `claim_payout`                                                                                                                     |
+| User writes               | `purchase_protection`, `settle_protection`, `terminal_cancel_protection`, `claim_payout`                                                                                       |
 | Owner writes              | `add_pool_funds`, `withdraw_unreserved_gen`, `add_settlement_operator`, `remove_settlement_operator`, `pause_purchases`, `unpause_purchases`                                   |
 
 ## Frontend and Wallet Architecture
@@ -409,16 +447,16 @@ The following results were reproduced against the current working tree.
 
 | Check                                        | Result                                        |
 | -------------------------------------------- | --------------------------------------------- |
-| Contract test suite                          | `133 passed`, `0 failed`, `0 skipped`         |
-| Frontend test suite                          | `54 passed`, `0 failed`                       |
+| Contract test suite                          | `165 passed`, `0 failed`, `0 skipped`         |
+| Frontend test suite                          | `57 passed`, `0 failed`                       |
 | GenVM lint and semantic validation           | Passed                                        |
-| GenVM schema/ABI extraction                  | Passed: `36` methods (`27` views, `9` writes) |
+| GenVM schema/ABI extraction                  | Passed: `38` methods (`28` views, `10` writes) |
 | GenVM contract typecheck                     | Passed with no type errors                    |
 | Security and access-control coverage         | Passed within the contract suite              |
 | Lifecycle and settlement-permission coverage | Passed within the contract suite              |
 | Pool and payout accounting coverage          | Passed within the contract suite              |
 | Pickling and storage round trips             | Passed within the contract suite              |
-| Current contract source size                 | `51,828` bytes (source only; not payload)     |
+| Current contract source size                 | `51,358` bytes (UTF-8 source only; not payload) |
 
 Tests use deterministic source mocks where external market-data behavior must be reproduced.
 They cover source validation, permission checks, operator swap-and-pop storage, settlement
@@ -430,14 +468,13 @@ retries, duplicate-call safety, lifecycle counters, and reserve accounting.
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Network          | GenLayer Bradbury                                                                                                                         |
 | Chain ID         | `4221`                                                                                                                                    |
-| Contract         | [`0x897C6a6544D29c8111239c6888828CFAcbe8db04`](https://explorer-bradbury.genlayer.com/address/0x897C6a6544D29c8111239c6888828CFAcbe8db04) |
+| Contract         | [`0x50C0073170f9de34e57227739441A153af2f5f84`](https://explorer-bradbury.genlayer.com/address/0x50C0073170f9de34e57227739441A153af2f5f84) |
 | RPC              | [https://rpc-bradbury.genlayer.com](https://rpc-bradbury.genlayer.com)                                                                    |
 | Explorer         | [https://explorer-bradbury.genlayer.com](https://explorer-bradbury.genlayer.com)                                                          |
 | Contract version | `1.0.0`                                                                                                                                   |
 
-The deployment was checked through public read calls. `get_config` returned
-`AegisProtection` version `1.0.0`; the deployed schema, markets, and terms matched the current
-contract source.
+The current production deployment is the contract address listed above. Its terminal-cancellation
+behavior and 38-method schema are present at that production address.
 
 ## Local Development
 

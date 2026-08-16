@@ -6,7 +6,9 @@ The deployer is the owner. Only the owner may fund the pool, pause/unpause
 purchases, withdraw unreserved GEN, and manage at most five settlement
 operators. The owner and approved operators may settle every protection; the
 stored protection owner may settle only that protection. Unrelated wallets
-cannot settle. Only the stored protection owner may claim its payout.
+cannot settle. The owner, approved operators, and stored protection owner may
+terminally cancel that protection after the deterministic grace period. Only
+the stored protection owner may claim its payout.
 
 Pause is intentionally purchase-only. It does not block settlement,
 expiration, claims, or pool reads.
@@ -50,6 +52,11 @@ A claimable, claimed, or expired protection cannot settle later dates.
 Repeated conclusive settlement of the same protection/date is idempotent and
 does not refetch sources or increment counters again.
 
+Historical source corrections do not retroactively alter a protection/date that
+has already reached a conclusive BREACHED or NOT_BREACHED result. Revised source
+evidence may only be considered while that protection/date remains unresolved
+or INCONCLUSIVE.
+
 The owner cannot withdraw reserved funds. Settlement is evidence caching plus a
 single-policy state transition; it never pushes a batch of payouts. Claims are
 pull-based.
@@ -59,10 +66,18 @@ pull-based.
 Expiration requires all eligible protection dates to have a conclusive
 `NOT_BREACHED` result and does not wait for informational `expires_at`. This
 prevents a caller from expiring protection while an
-unresolved eligible date might contain a breach. If a required dated dataset remains
-permanently unavailable, the policy remains active and reserved because the
-contract has no administrative oracle or outcome override. Authorized callers
-still cannot choose prices or outcomes.
+unresolved eligible date might contain a breach. If the earliest unresolved
+settlement date remains unresolved beyond the 3-day terminal grace period, an
+authorized caller may terminally cancel the ACTIVE protection. The payout reserve
+is released and the original premium is refunded to the protection owner.
+Terminal cancellation derives the earliest unresolved date internally, performs
+no market-data fetch, stores the cancellation time, date, and
+`DATA_UNAVAILABLE_OR_CONFLICTING` umbrella reason, meaning the earliest required settlement date
+remained unresolved through the grace period. It does not prove a specific source failure, source
+disagreement, or lack of settlement attempt. Cancellation cannot be repeated. Authorized
+callers still cannot choose prices or outcomes. The refund decreases
+`pool_balance` by exactly the stored premium; cumulative gross premium counters
+are not rewritten.
 
 Native claims and withdrawals use GenLayer finalized `emit_transfer`. The
 contract does not implement arbitrary callback execution or synchronous payout

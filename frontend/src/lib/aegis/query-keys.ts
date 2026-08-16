@@ -18,6 +18,8 @@ export const aegisKeys = {
   details: (id: bigint) => ["aegis", "protection-details", id.toString()] as const,
   readiness: (id: bigint, date: string) =>
     ["aegis", "settlement-readiness", id.toString(), date] as const,
+  terminalReadiness: (id: bigint) =>
+    ["aegis", "terminal-cancellation-readiness", id.toString()] as const,
   history: (id: bigint, start = 0) =>
     ["aegis", "settlement-history", id.toString(), start] as const,
   marketSettlement: (marketId: MarketId, date: string) =>

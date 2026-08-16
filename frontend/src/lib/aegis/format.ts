@@ -72,6 +72,7 @@ const STATUS_LABELS: Record<ContractStatus, string> = {
   CLAIMABLE: "Payout available",
   EXPIRED: "Ended",
   CLAIMED: "Paid",
+  CANCELLED: "Cancelled",
 };
 
 export function contractStatusLabel(status: ContractStatus | string) {

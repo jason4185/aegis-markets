@@ -17,6 +17,7 @@ import {
   mapSettlementHistory,
   mapSettlementAuthorization,
   mapSettlementReadiness,
+  mapTerminalCancellationReadiness,
 } from "./contract-mappers";
 import { AEGIS_METHODS } from "./contract-schema";
 import type { Duration, MarketId, SettlementResult, Threshold } from "./types";
@@ -184,6 +185,16 @@ export async function getSettlementReadiness(
     await readAegisContract(
       AEGIS_METHODS.getSettlementReadiness,
       [protectionId, settlementDate],
+      account,
+    ),
+  );
+}
+
+export async function getTerminalCancellationReadiness(protectionId: bigint, account?: Address) {
+  return mapTerminalCancellationReadiness(
+    await readAegisContract(
+      AEGIS_METHODS.getTerminalCancellationReadiness,
+      [protectionId],
       account,
     ),
   );

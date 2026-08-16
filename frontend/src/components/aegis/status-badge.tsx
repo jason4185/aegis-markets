@@ -7,6 +7,7 @@ const STATUS_STYLES: Record<ContractStatus, string> = {
   CLAIMABLE: "bg-brass/15 text-brass-foreground border-brass/45",
   EXPIRED: "bg-muted text-muted-foreground border-border",
   CLAIMED: "bg-success/12 text-success border-success/30",
+  CANCELLED: "bg-warning/15 text-warning-foreground border-warning/40",
 };
 
 export function StatusBadge({ status, className }: { status: ContractStatus; className?: string }) {

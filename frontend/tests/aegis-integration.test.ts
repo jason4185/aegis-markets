@@ -16,6 +16,7 @@ import {
   mapProductTerms,
   mapSettlementAuthorization,
   mapSettlementReadiness,
+  mapTerminalCancellationReadiness,
 } from "../src/lib/aegis/contract-mappers";
 import {
   contractStatusLabel,
@@ -71,7 +72,7 @@ describe("Bradbury configuration", () => {
     expect(BRADBURY_CHAIN_ID).toBe(4221);
     expect(BRADBURY_RPC_URL).toBe("https://rpc-bradbury.genlayer.com");
     expect(BRADBURY_EXPLORER_URL).toBe("https://explorer-bradbury.genlayer.com");
-    expect(AEGIS_PROTECTION_ADDRESS).toBe("0x897C6a6544D29c8111239c6888828CFAcbe8db04");
+    expect(AEGIS_PROTECTION_ADDRESS).toBe("0x50C0073170f9de34e57227739441A153af2f5f84");
     expect(AEGIS_OWNER_ADDRESS).toBe("0xC8Ba5DA455b011863F2ECa76a6fa21E62Cc91B87");
     expect(aegisConfig.networkName).toBe("GenLayer Bradbury");
   });
@@ -113,15 +114,10 @@ describe("Bradbury configuration", () => {
     expect(env.toLowerCase()).not.toContain("walletconnect");
   });
 
-  it("contains the production address and no previous deployment address", async () => {
+  it("contains the current production address", async () => {
     const config = await source("../src/lib/aegis/contract-config.ts");
     const env = await source("../.env.example");
-    const previous = [
-      ["0x884b5F5aEa2849999e5091b55d85de5f0f", "681597"].join(""),
-      ["0xFaE663775383e8346Be99492248A467dD", "812b86a"].join(""),
-    ];
     expect(`${config}\n${env}`).toContain(AEGIS_PROTECTION_ADDRESS);
-    for (const address of previous) expect(`${config}\n${env}`).not.toContain(address);
   });
 
   it("matches the deployed operator schema and omits manual expiry", () => {
@@ -132,6 +128,10 @@ describe("Bradbury configuration", () => {
     expect(AEGIS_METHODS.getSettlementOperatorAt).toBe("get_settlement_operator_at");
     expect(AEGIS_METHODS.getSettlementOperators).toBe("get_settlement_operators");
     expect(AEGIS_METHODS.canSettleProtection).toBe("can_settle_protection");
+    expect(AEGIS_METHODS.getTerminalCancellationReadiness).toBe(
+      "get_terminal_cancellation_readiness",
+    );
+    expect(AEGIS_METHODS.terminalCancelProtection).toBe("terminal_cancel_protection");
     expect(Object.values(AEGIS_METHODS)).not.toContain(
       ["finalize", "expired", "protection"].join("_"),
     );
@@ -358,6 +358,42 @@ describe("bigint-safe contract mapping", () => {
       }).authorized,
     ).toBe(false);
   });
+
+  it("maps deterministic terminal-cancellation readiness and stable reason codes", () => {
+    expect(
+      mapTerminalCancellationReadiness({
+        protection_id: 0,
+        eligible: true,
+        reason_code: "READY",
+        earliest_unresolved_date: "2026-08-15",
+        terminal_grace_days: 3,
+        terminal_eligible_date: "2026-08-19",
+        current_utc_day: 10,
+        protection_status: "ACTIVE",
+      }),
+    ).toEqual({
+      protection_id: 0n,
+      eligible: true,
+      reason_code: "READY",
+      earliest_unresolved_date: "2026-08-15",
+      terminal_grace_days: 3n,
+      terminal_eligible_date: "2026-08-19",
+      current_utc_day: 10n,
+      protection_status: "ACTIVE",
+    });
+    expect(() =>
+      mapTerminalCancellationReadiness({
+        protection_id: 0,
+        eligible: false,
+        reason_code: "UNKNOWN_REASON",
+        earliest_unresolved_date: "2026-08-15",
+        terminal_grace_days: 3,
+        terminal_eligible_date: "2026-08-19",
+        current_utc_day: 10,
+        protection_status: "ACTIVE",
+      }),
+    ).toThrow("reason_code");
+  });
 });
 
 describe("write architecture and lifecycle", () => {
@@ -571,6 +607,7 @@ describe("write architecture and lifecycle", () => {
     for (const method of [
       "purchaseProtection",
       "settleProtection",
+      "terminalCancelProtection",
       "claimPayout",
       "addSettlementOperator",
       "removeSettlementOperator",
@@ -601,6 +638,7 @@ describe("write architecture and lifecycle", () => {
     expect(modal).toContain("Your protection has been created successfully.");
     expect(modal).toContain("Settlement completed successfully.");
     expect(modal).toContain("Your payout was received successfully.");
+    expect(modal).toContain("Protection cancelled and original premium refunded.");
     expect(modal).toContain("The operator update was completed successfully.");
     expect(modal).toContain("Transaction details");
     expect(modal).not.toContain("{progress.method}");
@@ -633,6 +671,34 @@ describe("write architecture and lifecycle", () => {
     expect(settleSection).toContain("aegisKeys.dashboard(details.owner)");
   });
 
+  it("exposes terminal cancellation only after deterministic readiness and authorization", async () => {
+    const reads = await source("../src/lib/aegis/contract-reads.ts");
+    const writes = await source("../src/lib/aegis/contract-writes.ts");
+    const details = await source("../src/routes/protection.$id.tsx");
+    expect(reads).toContain("getTerminalCancellationReadiness");
+    expect(writes).toContain("getTerminalCancellationReadiness");
+    expect(writes).toContain("TERMINAL_CANCELLATION_NOT_READY");
+    expect(writes).toContain("args: [protectionId]");
+    expect(details).toContain("terminalReadiness.data?.eligible");
+    expect(details).toContain("Cancel protection and refund premium");
+    expect(details).toContain("released payout");
+    expect(details).toContain("was not paid to the user");
+  });
+
+  it("does not show retry guidance for a cancelled inconclusive protection", async () => {
+    const details = await source("../src/routes/protection.$id.tsx");
+    expect(details).toContain(
+      "Settlement data remained unresolved through the terminal grace period.",
+    );
+    const cancellationGuard = details.indexOf('details.data.status !== "CANCELLED"');
+    const retryGuidance = details.lastIndexOf(
+      "The two sources produced different trigger outcomes.",
+    );
+    expect(cancellationGuard).toBeGreaterThan(-1);
+    expect(cancellationGuard).toBeLessThan(retryGuidance);
+    expect(details).toContain("The two sources produced different trigger outcomes.");
+  });
+
   it("has no manual-expiry write and leaves automatic expiry to settlement", async () => {
     const writes = await source("../src/lib/aegis/contract-writes.ts");
     const details = await source("../src/routes/protection.$id.tsx");
@@ -648,6 +714,7 @@ describe("write architecture and lifecycle", () => {
     expect(contractStatusLabel("CLAIMABLE")).toBe("Payout available");
     expect(contractStatusLabel("EXPIRED")).toBe("Ended");
     expect(contractStatusLabel("CLAIMED")).toBe("Paid");
+    expect(contractStatusLabel("CANCELLED")).toBe("Cancelled");
     expect(settlementResultLabel("UNPROCESSED")).toBe("Not checked yet");
     expect(settlementResultLabel("INCONCLUSIVE")).toBe("Awaiting confirmation");
     expect(settlementResultLabel("NOT_BREACHED")).toBe("No qualifying move");

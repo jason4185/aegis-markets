@@ -38,6 +38,8 @@ const CONTRACT_MESSAGES: Record<string, string> = {
   INVALID_ADDRESS: "The wallet address is invalid.",
   SETTLEMENT_DATA_NOT_READY:
     "Daily market data is still being finalized. Try again after the next UTC day begins.",
+  TERMINAL_CANCELLATION_NOT_READY:
+    "Terminal cancellation is not available until the unresolved date's grace period ends.",
 };
 
 function errorText(error: unknown) {

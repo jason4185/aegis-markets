@@ -21,6 +21,7 @@ import type {
   SettlementReadinessCode,
   SettlementResult,
   SupportedMarket,
+  TerminalCancellationReadiness,
   Threshold,
 } from "./types";
 
@@ -84,6 +85,9 @@ type ContractField =
   | "claimable"
   | "claimed"
   | "reserve_released"
+  | "cancellation_timestamp"
+  | "cancellation_settlement_date"
+  | "cancellation_reason"
   | "first_settlement_date"
   | "last_settlement_date"
   | "next_unresolved_settlement_date"
@@ -99,6 +103,10 @@ type ContractField =
   | "inside_protection_window"
   | "is_future_date"
   | "protection_status"
+  | "eligible"
+  | "earliest_unresolved_date"
+  | "terminal_grace_days"
+  | "terminal_eligible_date"
   | "previous_result"
   | "market_settlement_exists"
   | "market_settlement_finalized"
@@ -174,7 +182,7 @@ const CATEGORIES = ["CURRENCY", "METAL"] as const;
 const DIRECTIONS = ["DOWN", "UP"] as const;
 const DURATIONS = [7n, 14n, 30n] as const;
 const THRESHOLDS = [2n, 3n, 4n] as const;
-const STATUSES = ["ACTIVE", "CLAIMABLE", "EXPIRED", "CLAIMED"] as const;
+const STATUSES = ["ACTIVE", "CLAIMABLE", "EXPIRED", "CLAIMED", "CANCELLED"] as const;
 const RESULTS = ["UNPROCESSED", "BREACHED", "NOT_BREACHED", "INCONCLUSIVE"] as const;
 const READINESS_CODES = [
   "INVALID_SETTLEMENT_DATE",
@@ -348,6 +356,12 @@ export function mapProtectionCard(value: unknown): ProtectionCard {
     claimable: boolean(item.claimable, "claimable"),
     claimed: boolean(item.claimed, "claimed"),
     reserve_released: boolean(item.reserve_released, "reserve_released"),
+    cancellation_timestamp: contractBigInt(item.cancellation_timestamp, "cancellation_timestamp"),
+    cancellation_settlement_date: string(
+      item.cancellation_settlement_date,
+      "cancellation_settlement_date",
+    ),
+    cancellation_reason: string(item.cancellation_reason, "cancellation_reason"),
   };
 }
 
@@ -424,6 +438,24 @@ export function mapSettlementAuthorization(value: unknown): SettlementAuthorizat
     is_contract_owner: boolean(item.is_contract_owner, "is_contract_owner"),
     is_operator: boolean(item.is_operator, "is_operator"),
     is_protection_owner: boolean(item.is_protection_owner, "is_protection_owner"),
+  };
+}
+
+export function mapTerminalCancellationReadiness(value: unknown): TerminalCancellationReadiness {
+  const item = record(value, "terminal cancellation readiness");
+  return {
+    protection_id: contractBigInt(item.protection_id, "protection_id"),
+    eligible: boolean(item.eligible, "eligible"),
+    reason_code: literal(
+      item.reason_code,
+      ["READY", "PROTECTION_NOT_ACTIVE", "NO_UNRESOLVED_DATE", "GRACE_PERIOD_ACTIVE"] as const,
+      "reason_code",
+    ),
+    earliest_unresolved_date: string(item.earliest_unresolved_date, "earliest_unresolved_date"),
+    terminal_grace_days: contractBigInt(item.terminal_grace_days, "terminal_grace_days"),
+    terminal_eligible_date: string(item.terminal_eligible_date, "terminal_eligible_date"),
+    current_utc_day: contractBigInt(item.current_utc_day, "current_utc_day"),
+    protection_status: literal(item.protection_status, STATUSES, "protection_status"),
   };
 }
 

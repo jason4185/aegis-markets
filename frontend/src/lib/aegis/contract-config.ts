@@ -3,7 +3,7 @@ import { isAddress, type Address } from "viem";
 export const BRADBURY_CHAIN_ID = 4221;
 export const BRADBURY_RPC_URL = "https://rpc-bradbury.genlayer.com";
 export const BRADBURY_EXPLORER_URL = "https://explorer-bradbury.genlayer.com";
-export const AEGIS_PROTECTION_ADDRESS = "0x897C6a6544D29c8111239c6888828CFAcbe8db04" as Address;
+export const AEGIS_PROTECTION_ADDRESS = "0x50C0073170f9de34e57227739441A153af2f5f84" as Address;
 export const AEGIS_OWNER_ADDRESS = "0xC8Ba5DA455b011863F2ECa76a6fa21E62Cc91B87" as Address;
 
 type AegisConfig = {

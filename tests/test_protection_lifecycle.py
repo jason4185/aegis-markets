@@ -317,3 +317,51 @@ def test_settlement_history_uses_exact_processed_version():
     assert history[1]["result"] == "UNPROCESSED"
     readiness = contract.get_settlement_readiness(protection_id, "2026-06-02")
     assert readiness["reason_code"] == "DATE_ALREADY_SETTLED"
+
+
+def test_settlement_history_does_not_leak_shared_evidence_to_unprocessed_protection():
+    contract = deploy()
+    fund(contract)
+    unprocessed_id = purchase(contract, buyer=ALICE)
+    processed_id = purchase(contract, buyer=BOB)
+    mock_settlement("2026-06-02")
+    set_context(BOB, 0, "2026-06-03T12:00:00Z")
+    assert contract.settle_protection(processed_id, "2026-06-02") == "NOT_BREACHED"
+
+    unprocessed = contract.get_settlement_history(unprocessed_id, 0, 1)[0]
+    assert unprocessed["result"] == "UNPROCESSED"
+    assert unprocessed["processed"] is False
+    assert unprocessed["market_settlement_version"] == 0
+    assert unprocessed["market_settlement_exists"] is False
+    assert unprocessed["fxratesapi_price"] == 0
+    assert unprocessed["fawaz_price"] == 0
+    assert unprocessed["source_a_date"] == ""
+    assert unprocessed["source_b_date"] == ""
+    assert unprocessed["settled_at"] == 0
+
+    processed = contract.get_settlement_history(processed_id, 0, 1)[0]
+    assert processed["result"] == "NOT_BREACHED"
+    assert processed["processed"] is True
+    assert processed["market_settlement_version"] == 1
+    assert processed["market_settlement_exists"] is True
+    assert processed["fxratesapi_price"] > 0
+    assert processed["fawaz_price"] > 0
+
+
+def test_settlement_history_inconclusive_uses_exact_used_version():
+    contract = deploy()
+    fund(contract)
+    protection_id = purchase(contract)
+    split_fx = {"GBP": "0.82", "JPY": "150", "TRY": "32", "XAU": "0.0005", "XAG": "0.04"}
+    split_fawaz = {"gbp": "0.8", "jpy": "150", "try": "32", "xau": "0.0005", "xag": "0.04"}
+    mock_settlement("2026-06-02", fx_rates=split_fx, fawaz_rates=split_fawaz)
+    set_context(ALICE, 0, "2026-06-03T12:00:00Z")
+    assert contract.settle_protection(protection_id, "2026-06-02") == "INCONCLUSIVE"
+
+    history = contract.get_settlement_history(protection_id, 0, 1)[0]
+    assert history["result"] == "INCONCLUSIVE"
+    assert history["processed"] is True
+    assert history["market_settlement_version"] == 1
+    assert history["market_settlement_exists"] is True
+    assert history["fxratesapi_price"] > 0
+    assert history["fawaz_price"] > 0

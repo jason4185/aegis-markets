@@ -16,6 +16,7 @@ import {
   getPurchasesPaused,
   getSettlementOperatorCount,
   getSettlementReadiness,
+  getTerminalCancellationReadiness,
   isSettlementOperator,
   quoteProtection,
 } from "./contract-reads";
@@ -459,6 +460,48 @@ export async function settleProtection({
     aegisKeys.stats,
   ]);
   return { ...transaction, settlementDate };
+}
+
+export async function terminalCancelProtection({
+  context,
+  protectionId,
+  onProgress,
+  queryClient,
+}: {
+  context: WriteContext;
+  protectionId: bigint;
+  onProgress?: ProgressCallback | undefined;
+  queryClient?: QueryClient | undefined;
+}) {
+  if (!context.address) throw new Error("WALLET_NOT_CONNECTED");
+  const details = await getProtectionDetails(protectionId, context.address);
+  const [readiness, authorization] = await Promise.all([
+    getTerminalCancellationReadiness(protectionId, context.address),
+    canSettleProtection(context.address, protectionId),
+  ]);
+  if (!authorization.authorized) throw new Error("UNAUTHORIZED_CALLER");
+  if (!readiness.eligible) throw new Error("TERMINAL_CANCELLATION_NOT_READY");
+  const transaction = await writeAegisContract({
+    context,
+    functionName: AEGIS_METHODS.terminalCancelProtection,
+    args: [protectionId],
+    onProgress,
+  });
+  await invalidate(queryClient, [
+    aegisKeys.details(protectionId),
+    aegisKeys.history(protectionId),
+    aegisKeys.terminalReadiness(protectionId),
+    aegisKeys.readiness(protectionId, readiness.earliest_unresolved_date),
+    aegisKeys.settlementAuthorization(protectionId, context.address),
+    aegisKeys.dashboard(context.address),
+    aegisKeys.owned(context.address),
+    aegisKeys.dashboard(details.owner),
+    aegisKeys.ownedCount(details.owner),
+    aegisKeys.owned(details.owner),
+    aegisKeys.stats,
+    aegisKeys.pool,
+  ]);
+  return transaction;
 }
 
 export async function addSettlementOperator({

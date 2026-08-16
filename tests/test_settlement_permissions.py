@@ -177,6 +177,7 @@ def test_storage_layout_appends_operator_fields_and_preserves_records():
         "reference_price", "trigger_price", "source_timestamp", "purchased_at",
         "first_settlement_day", "last_settlement_day", "expires_at", "status",
         "breach_date", "processed_dates", "inconclusive_dates", "reserve_released", "claimed",
+        "cancellation_timestamp", "cancellation_settlement_date", "cancellation_reason",
     ]
     assert list(C.AegisProtection.__annotations__)[-4:] == [
         "settlement_operators", "settlement_operator_addresses",

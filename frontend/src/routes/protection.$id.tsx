@@ -13,8 +13,13 @@ import {
   getProtectionDetails,
   getSettlementHistory,
   getSettlementReadiness,
+  getTerminalCancellationReadiness,
 } from "@/lib/aegis/contract-reads";
-import { claimPayout, settleProtection } from "@/lib/aegis/contract-writes";
+import {
+  claimPayout,
+  settleProtection,
+  terminalCancelProtection,
+} from "@/lib/aegis/contract-writes";
 import { normalizeAegisError, publicReadErrorMessage } from "@/lib/aegis/errors";
 import {
   formatDate,
@@ -99,6 +104,15 @@ function ProtectionPage() {
     enabled: protectionId !== null && Boolean(nextDate),
     refetchInterval: nextDate ? 60_000 : false,
   });
+  const terminalReadiness = useQuery({
+    queryKey:
+      protectionId === null
+        ? ["aegis", "invalid-terminal-readiness"]
+        : aegisKeys.terminalReadiness(protectionId),
+    queryFn: () => getTerminalCancellationReadiness(protectionId!, wallet.address),
+    enabled: protectionId !== null && Boolean(details.data),
+    refetchInterval: 60_000,
+  });
   const authorization = useQuery({
     queryKey:
       protectionId === null
@@ -117,7 +131,12 @@ function ProtectionPage() {
     queryFn: () => getMarketSettlement(details.data!.market_id, nextDate, wallet.address),
     enabled: Boolean(readiness.data?.market_settlement_exists && details.data && nextDate),
   });
-  const error = details.error ?? history.error ?? readiness.error ?? authorization.error;
+  const error =
+    details.error ??
+    history.error ??
+    readiness.error ??
+    terminalReadiness.error ??
+    authorization.error;
   const isOwner = Boolean(
     wallet.address && details.data?.owner.toLowerCase() === wallet.address.toLowerCase(),
   );
@@ -136,10 +155,23 @@ function ProtectionPage() {
     wallet.isConnected &&
     !wallet.isWrongNetwork,
   );
+  const canSubmitTerminalCancellation = Boolean(
+    terminalReadiness.data?.eligible &&
+    authorization.data?.authorized &&
+    details.data?.status === "ACTIVE" &&
+    wallet.isConnected &&
+    !wallet.isWrongNetwork,
+  );
 
-  async function runAction(kind: "settle" | "claim") {
+  async function runAction(kind: "settle" | "claim" | "terminal-cancel") {
     if (protectionId === null) return;
-    transaction.begin(kind === "settle" ? "Settling protection" : "Claiming payout");
+    transaction.begin(
+      kind === "settle"
+        ? "Settling protection"
+        : kind === "claim"
+          ? "Claiming payout"
+          : "Cancelling protection",
+    );
     try {
       if (kind === "settle") {
         await settleProtection({
@@ -148,8 +180,15 @@ function ProtectionPage() {
           onProgress: transaction.onProgress,
           queryClient,
         });
-      } else {
+      } else if (kind === "claim") {
         await claimPayout({
+          context: wallet.getWriteContext(),
+          protectionId,
+          onProgress: transaction.onProgress,
+          queryClient,
+        });
+      } else {
+        await terminalCancelProtection({
           context: wallet.getWriteContext(),
           protectionId,
           onProgress: transaction.onProgress,
@@ -295,6 +334,20 @@ function ProtectionPage() {
                   ) : null}
                 </div>
               ) : null}
+              {details.data.status === "ACTIVE" &&
+              terminalReadiness.data?.earliest_unresolved_date ? (
+                <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-4">
+                  <p className="text-sm font-medium">Terminal cancellation readiness</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Settlement data for{" "}
+                    {formatDate(terminalReadiness.data.earliest_unresolved_date)} remains
+                    unresolved.{" "}
+                    {terminalReadiness.data.eligible
+                      ? "An authorized caller can cancel this protection, release the payout reserve, and refund the original premium."
+                      : `The original premium can be refunded after ${formatDate(terminalReadiness.data.terminal_eligible_date)}.`}
+                  </p>
+                </div>
+              ) : null}
               {!wallet.isConnected ? (
                 <div className="mt-5">
                   <WalletControl />
@@ -331,6 +384,11 @@ function ProtectionPage() {
                         : "Settlement unavailable"}
                   </Button>
                 ) : null}
+                {canSubmitTerminalCancellation ? (
+                  <Button variant="outline" onClick={() => void runAction("terminal-cancel")}>
+                    Cancel protection and refund premium
+                  </Button>
+                ) : null}
                 {canClaim && !wallet.isWrongNetwork ? (
                   <Button onClick={() => void runAction("claim")}>
                     Claim {formatGen(details.data.payout)}
@@ -358,17 +416,26 @@ function ProtectionPage() {
                   and its reserved payout was released by the contract.
                 </p>
               ) : null}
-              {details.data.latest_settlement_result === "BREACHED" ? (
-                <p className="mt-4 text-sm text-success">Protection is now claimable.</p>
-              ) : details.data.latest_settlement_result === "NOT_BREACHED" ? (
+              {details.data.status === "CANCELLED" ? (
                 <p className="mt-4 text-sm text-muted-foreground">
-                  The trigger was not confirmed for this date.
+                  Settlement data remained unresolved through the terminal grace period. The
+                  original premium was refunded to the protection owner; the released payout reserve
+                  was not paid to the user.
                 </p>
-              ) : details.data.latest_settlement_result === "INCONCLUSIVE" ? (
-                <p className="mt-4 text-sm text-warning-foreground">
-                  The two sources produced different trigger outcomes. Try this settlement date
-                  again later.
-                </p>
+              ) : null}
+              {details.data.status !== "CANCELLED" ? (
+                details.data.latest_settlement_result === "BREACHED" ? (
+                  <p className="mt-4 text-sm text-success">Protection is now claimable.</p>
+                ) : details.data.latest_settlement_result === "NOT_BREACHED" ? (
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    The trigger was not confirmed for this date.
+                  </p>
+                ) : details.data.latest_settlement_result === "INCONCLUSIVE" ? (
+                  <p className="mt-4 text-sm text-warning-foreground">
+                    The two sources produced different trigger outcomes. Try this settlement date
+                    again later.
+                  </p>
+                ) : null
               ) : null}
             </section>
 

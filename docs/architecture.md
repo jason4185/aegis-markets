@@ -39,9 +39,9 @@ primitive fields, compact storage dataclasses, and `TreeMap` indexes:
 
 Raw response bodies are never stored. A protection stores only ownership,
 terms, reference/trigger prices, timestamps and eligible-day bounds, status,
-settlement counters, breach date, and claim/reserve guards. A market settlement
-stores the two normalized prices, source identifiers, source dates, status, and
-finalization metadata.
+settlement counters, breach date, claim/reserve guards, and terminal-cancellation
+metadata when applicable. A market settlement stores the two normalized prices,
+source identifiers, source dates, status, and finalization metadata.
 
 ## Write flow
 
@@ -71,6 +71,22 @@ dates until it is retried successfully.
 The final required `NOT_BREACHED` result expires an active protection and
 releases its reserve immediately. `expires_at` remains informational metadata;
 there is no manual expiry write. `INCONCLUSIVE` dates remain active until retried.
+
+If the earliest unresolved date remains unresolved beyond the 3-day terminal
+grace period, the protection owner, contract owner, or approved settlement
+operator may call `terminal_cancel_protection(protection_id)`. The contract
+derives the date internally, releases the reserved payout, refunds exactly the
+stored premium to the protection owner through the finalized transfer pattern,
+and stores the timestamp, unresolved date, and
+`DATA_UNAVAILABLE_OR_CONFLICTING` reason. The reason is an umbrella terminal-resolution reason:
+the earliest required settlement date remained unresolved through the grace period. It does not
+prove a specific source failure, source disagreement, or lack of settlement attempt. It performs
+no source fetch.
+
+Historical source corrections do not retroactively alter a protection/date that
+has already reached a conclusive BREACHED or NOT_BREACHED result. Revised source
+evidence may only be considered while that protection/date remains unresolved or
+INCONCLUSIVE.
 
 Claims are pull-based and owner-only. Accounting and lifecycle flags change
 before a finalized native-token transfer is emitted. Settlement never loops

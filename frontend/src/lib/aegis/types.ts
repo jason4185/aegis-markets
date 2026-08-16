@@ -7,7 +7,7 @@ export type MarketCategory = "CURRENCY" | "METAL";
 export type ProtectedDirection = "DOWN" | "UP";
 export type Threshold = 2 | 3 | 4;
 export type Duration = 7 | 14 | 30;
-export type ContractStatus = "ACTIVE" | "CLAIMABLE" | "EXPIRED" | "CLAIMED";
+export type ContractStatus = "ACTIVE" | "CLAIMABLE" | "EXPIRED" | "CLAIMED" | "CANCELLED";
 export type SettlementResult = "UNPROCESSED" | "BREACHED" | "NOT_BREACHED" | "INCONCLUSIVE";
 export type SettlementDayState =
   "UPCOMING" | "READY" | "SETTLING" | "NOT_BREACHED" | "BREACHED" | "INCONCLUSIVE";
@@ -114,6 +114,9 @@ export interface ProtectionCard {
   claimable: boolean;
   claimed: boolean;
   reserve_released: boolean;
+  cancellation_timestamp: bigint;
+  cancellation_settlement_date: string;
+  cancellation_reason: string;
 }
 
 export interface ProtectionDetails extends ProtectionCard {
@@ -163,6 +166,20 @@ export interface SettlementAuthorization {
   is_contract_owner: boolean;
   is_operator: boolean;
   is_protection_owner: boolean;
+}
+
+export type TerminalCancellationReadinessCode =
+  "READY" | "PROTECTION_NOT_ACTIVE" | "NO_UNRESOLVED_DATE" | "GRACE_PERIOD_ACTIVE";
+
+export interface TerminalCancellationReadiness {
+  protection_id: bigint;
+  eligible: boolean;
+  reason_code: TerminalCancellationReadinessCode;
+  earliest_unresolved_date: string;
+  terminal_grace_days: bigint;
+  terminal_eligible_date: string;
+  current_utc_day: bigint;
+  protection_status: ContractStatus;
 }
 
 export interface SettlementHistoryEntry {
