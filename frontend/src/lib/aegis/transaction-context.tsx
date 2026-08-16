@@ -14,6 +14,7 @@ import { createAegisReadClient } from "./contract-client";
 import { waitForAcceptedExecution } from "./contract-writes";
 import { normalizeAegisError } from "./errors";
 import { PENDING_TRANSACTION_STORAGE_KEY, persistTransactionProgress } from "./transaction-storage";
+import { aegisKeys } from "./query-keys";
 import type { TransactionProgress } from "./types";
 
 type TransactionContextValue = {
@@ -141,7 +142,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
         });
         if (processed.current.has(pending.hash)) return;
         processed.current.add(pending.hash);
-        await queryClient.invalidateQueries({ queryKey: ["aegis"] });
+        await queryClient.invalidateQueries({ queryKey: aegisKeys.scope });
       } catch (error) {
         fail(error);
       } finally {

@@ -93,6 +93,13 @@ describe("Bradbury configuration", () => {
     );
   });
 
+  it("uses the verified deployment when address and network env values are absent", () => {
+    const parsed = parseAegisConfig({});
+    expect(parsed.contractAddress).toBe(AEGIS_PROTECTION_ADDRESS);
+    expect(parsed.chainId).toBe(BRADBURY_CHAIN_ID);
+    expect(parsed.rpcUrl).toBe(BRADBURY_RPC_URL);
+  });
+
   it("passes public address parameters as complete strings", async () => {
     const reads = await source("../src/lib/aegis/contract-reads.ts");
     const writes = await source("../src/lib/aegis/contract-writes.ts");
@@ -148,6 +155,8 @@ describe("Bradbury configuration", () => {
       ACCOUNT.toLowerCase(),
       0,
     ]);
+    expect(aegisKeys.dashboard(ACCOUNT)).not.toEqual(aegisKeys.dashboard(OTHER));
+    expect(aegisKeys.owned(ACCOUNT)).not.toEqual(aegisKeys.owned(OTHER));
     expect(aegisKeys.dashboard(ACCOUNT)).not.toEqual(["aegis", "dashboard", ACCOUNT.toLowerCase()]);
   });
 });
@@ -612,7 +621,7 @@ describe("write architecture and lifecycle", () => {
     expect(purchase).toContain("for (const delay of [0, 1000, 2000, 3000])");
     const recovery = await source("../src/lib/aegis/transaction-context.tsx");
     expect(recovery).toContain("waitForAcceptedExecution");
-    expect(recovery).toContain('invalidateQueries({ queryKey: ["aegis"] })');
+    expect(recovery).toContain("invalidateQueries({ queryKey: aegisKeys.scope })");
     expect(recovery).toContain("processed.current.has(pending.hash)");
   });
 
@@ -746,6 +755,8 @@ describe("write architecture and lifecycle", () => {
     expect(writes).toContain("invalidateQueries");
     expect(writes).toContain("aegisKeys.stats");
     expect(writes).toContain("aegisKeys.pool");
+    expect(writes).toContain("aegisKeys.liquidity");
+    expect(writes).toContain("aegisKeys.terminalReadiness");
     expect(writes).toContain("aegisKeys.dashboard");
   });
 });

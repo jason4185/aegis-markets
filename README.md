@@ -436,10 +436,11 @@ the centralized service asks the active connector for its current EIP-1193 provi
 `eth_chainId` against `4221`. React route components do not own raw providers or submit direct
 RPC writes.
 
-TanStack Query keys contract data by subject, wallet address, protection ID, and settlement
-date. Successful writes invalidate the relevant cached reads. The transaction lifecycle treats
-a structured GenLayer `ACCEPTED` status as completed immediately, provided execution succeeded
-and did not revert. It does not wait for a later `FINALIZED` status.
+TanStack Query keys contract data by the Aegis namespace, Bradbury chain ID, current contract
+address, subject, wallet address, protection ID, and settlement date. Successful writes invalidate
+the relevant scoped cached reads. The transaction lifecycle treats a structured GenLayer
+`ACCEPTED` status as completed immediately, provided execution succeeded and did not revert. It
+does not wait for a later `FINALIZED` status.
 
 ## Testing and Validation
 
@@ -448,7 +449,7 @@ The following results were reproduced against the current working tree.
 | Check                                        | Result                                        |
 | -------------------------------------------- | --------------------------------------------- |
 | Contract test suite                          | `165 passed`, `0 failed`, `0 skipped`         |
-| Frontend test suite                          | `57 passed`, `0 failed`                       |
+| Frontend test suite                          | `60 passed`, `0 failed`                       |
 | GenVM lint and semantic validation           | Passed                                        |
 | GenVM schema/ABI extraction                  | Passed: `38` methods (`28` views, `10` writes) |
 | GenVM contract typecheck                     | Passed with no type errors                    |

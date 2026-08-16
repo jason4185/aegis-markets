@@ -2,7 +2,9 @@
 
 This frontend originated from the `aegis-protection-suite` Lovable prototype. It is now maintained as normal tracked source inside the Aegis Markets monorepo rather than as a submodule.
 
-The interface includes mocked data and placeholder contract-service methods. Contract integration may remain incomplete until a deployed contract address and live GenLayer client are configured and verified.
+The interface uses live GenLayer contract reads and writes. Runtime configuration targets GenLayer
+Bradbury through the validated values in `src/lib/aegis/contract-config.ts` and the Vite
+environment variables documented in `.env.example`.
 
 ## Local Development
 

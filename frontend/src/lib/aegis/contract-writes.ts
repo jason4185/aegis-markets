@@ -449,6 +449,7 @@ export async function settleProtection({
   await invalidate(queryClient, [
     aegisKeys.details(protectionId),
     aegisKeys.history(protectionId),
+    aegisKeys.terminalReadiness(protectionId),
     aegisKeys.readiness(protectionId, settlementDate),
     aegisKeys.settlementAuthorization(protectionId, context.address),
     aegisKeys.marketSettlement(details.market_id, settlementDate),
@@ -458,6 +459,8 @@ export async function settleProtection({
     aegisKeys.ownedCount(details.owner),
     aegisKeys.owned(details.owner),
     aegisKeys.stats,
+    aegisKeys.pool,
+    aegisKeys.liquidity,
   ]);
   return { ...transaction, settlementDate };
 }
@@ -500,6 +503,7 @@ export async function terminalCancelProtection({
     aegisKeys.owned(details.owner),
     aegisKeys.stats,
     aegisKeys.pool,
+    aegisKeys.liquidity,
   ]);
   return transaction;
 }
