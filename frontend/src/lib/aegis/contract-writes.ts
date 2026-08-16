@@ -535,7 +535,7 @@ export async function addSettlementOperator({
     aegisKeys.operatorCount,
     aegisKeys.operators,
     aegisKeys.operator(operator),
-    ["aegis", "settlement-authorization"],
+    aegisKeys.settlementAuthorizationRoot,
   ]);
   return transaction;
 }
@@ -564,7 +564,7 @@ export async function removeSettlementOperator({
     aegisKeys.operatorCount,
     aegisKeys.operators,
     aegisKeys.operator(operator),
-    ["aegis", "settlement-authorization"],
+    aegisKeys.settlementAuthorizationRoot,
   ]);
   return transaction;
 }

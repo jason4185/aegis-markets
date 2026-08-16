@@ -79,13 +79,13 @@ function ProtectionPage() {
   const [now, setNow] = useState(() => new Date());
   const details = useQuery({
     queryKey:
-      protectionId === null ? ["aegis", "invalid-protection"] : aegisKeys.details(protectionId),
+      protectionId === null ? aegisKeys.invalid("protection") : aegisKeys.details(protectionId),
     queryFn: () => getProtectionDetails(protectionId!, wallet.address),
     enabled: protectionId !== null,
   });
   const history = useQuery({
     queryKey:
-      protectionId === null ? ["aegis", "invalid-history"] : aegisKeys.history(protectionId),
+      protectionId === null ? aegisKeys.invalid("history") : aegisKeys.history(protectionId),
     queryFn: () =>
       getSettlementHistory(protectionId!, 0n, details.data!.duration_days, wallet.address),
     enabled: protectionId !== null && Boolean(details.data),
@@ -98,7 +98,7 @@ function ProtectionPage() {
   const readiness = useQuery({
     queryKey:
       protectionId === null
-        ? ["aegis", "invalid-readiness"]
+        ? aegisKeys.invalid("readiness")
         : aegisKeys.readiness(protectionId, nextDate),
     queryFn: () => getSettlementReadiness(protectionId!, nextDate, wallet.address),
     enabled: protectionId !== null && Boolean(nextDate),
@@ -107,7 +107,7 @@ function ProtectionPage() {
   const terminalReadiness = useQuery({
     queryKey:
       protectionId === null
-        ? ["aegis", "invalid-terminal-readiness"]
+        ? aegisKeys.invalid("terminal-readiness")
         : aegisKeys.terminalReadiness(protectionId),
     queryFn: () => getTerminalCancellationReadiness(protectionId!, wallet.address),
     enabled: protectionId !== null && Boolean(details.data),
@@ -116,7 +116,7 @@ function ProtectionPage() {
   const authorization = useQuery({
     queryKey:
       protectionId === null
-        ? ["aegis", "invalid-settlement-authorization"]
+        ? aegisKeys.invalid("settlement-authorization")
         : aegisKeys.settlementAuthorization(protectionId, wallet.address),
     queryFn: () => canSettleProtection(wallet.address!, protectionId!),
     enabled:
@@ -127,7 +127,7 @@ function ProtectionPage() {
     queryKey:
       details.data && nextDate
         ? aegisKeys.marketSettlement(details.data.market_id, nextDate)
-        : ["aegis", "inactive-market-settlement"],
+        : aegisKeys.invalid("inactive-market-settlement"),
     queryFn: () => getMarketSettlement(details.data!.market_id, nextDate, wallet.address),
     enabled: Boolean(readiness.data?.market_settlement_exists && details.data && nextDate),
   });

@@ -1,34 +1,42 @@
 import type { Address } from "viem";
 import type { Duration, MarketId, Threshold } from "./types";
+import { aegisConfig } from "./contract-config";
+
+const AEGIS_QUERY_SCOPE = [
+  "aegis",
+  aegisConfig.chainId,
+  aegisConfig.contractAddress.toLowerCase(),
+] as const;
+
+function key(...parts: readonly unknown[]) {
+  return [...AEGIS_QUERY_SCOPE, ...parts] as const;
+}
 
 export const aegisKeys = {
-  config: ["aegis", "config"] as const,
-  markets: ["aegis", "supported-markets"] as const,
-  market: (marketId: MarketId) => ["aegis", "market", marketId] as const,
-  terms: ["aegis", "product-terms"] as const,
-  quote: (duration: Duration, event: Threshold) => ["aegis", "quote", duration, event] as const,
-  pool: ["aegis", "pool-state"] as const,
-  liquidity: ["aegis", "available-liquidity"] as const,
-  stats: ["aegis", "protocol-stats"] as const,
-  paused: ["aegis", "purchases-paused"] as const,
-  dashboard: (address?: Address) => ["aegis", "dashboard", address?.toLowerCase()] as const,
-  ownedCount: (address?: Address) => ["aegis", "owned-count", address?.toLowerCase()] as const,
-  owned: (address?: Address, start = 0) =>
-    ["aegis", "owned-protections", address?.toLowerCase(), start] as const,
-  details: (id: bigint) => ["aegis", "protection-details", id.toString()] as const,
-  readiness: (id: bigint, date: string) =>
-    ["aegis", "settlement-readiness", id.toString(), date] as const,
-  terminalReadiness: (id: bigint) =>
-    ["aegis", "terminal-cancellation-readiness", id.toString()] as const,
-  history: (id: bigint, start = 0) =>
-    ["aegis", "settlement-history", id.toString(), start] as const,
-  marketSettlement: (marketId: MarketId, date: string) =>
-    ["aegis", "market-settlement", marketId, date] as const,
+  scope: AEGIS_QUERY_SCOPE,
+  invalid: (name: string) => key("invalid", name),
+  config: key("config"),
+  markets: key("supported-markets"),
+  market: (marketId: MarketId) => key("market", marketId),
+  terms: key("product-terms"),
+  quote: (duration: Duration, event: Threshold) => key("quote", duration, event),
+  pool: key("pool-state"),
+  liquidity: key("available-liquidity"),
+  stats: key("protocol-stats"),
+  paused: key("purchases-paused"),
+  dashboard: (address?: Address) => key("dashboard", address?.toLowerCase()),
+  ownedCount: (address?: Address) => key("owned-count", address?.toLowerCase()),
+  owned: (address?: Address, start = 0) => key("owned-protections", address?.toLowerCase(), start),
+  details: (id: bigint) => key("protection-details", id.toString()),
+  readiness: (id: bigint, date: string) => key("settlement-readiness", id.toString(), date),
+  terminalReadiness: (id: bigint) => key("terminal-cancellation-readiness", id.toString()),
+  history: (id: bigint, start = 0) => key("settlement-history", id.toString(), start),
+  marketSettlement: (marketId: MarketId, date: string) => key("market-settlement", marketId, date),
   settlementAuthorization: (id: bigint, address?: Address) =>
-    ["aegis", "settlement-authorization", id.toString(), address?.toLowerCase()] as const,
-  operatorCount: ["aegis", "settlement-operator-count"] as const,
-  operators: ["aegis", "settlement-operators"] as const,
-  operator: (address?: Address) =>
-    ["aegis", "settlement-operator", address?.toLowerCase()] as const,
-  transactions: ["aegis", "transactions"] as const,
+    key("settlement-authorization", id.toString(), address?.toLowerCase()),
+  settlementAuthorizationRoot: key("settlement-authorization"),
+  operatorCount: key("settlement-operator-count"),
+  operators: key("settlement-operators"),
+  operator: (address?: Address) => key("settlement-operator", address?.toLowerCase()),
+  transactions: key("transactions"),
 };

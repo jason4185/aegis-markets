@@ -40,6 +40,7 @@ import {
 } from "../src/lib/aegis/transaction-storage";
 import { normalizeAegisError } from "../src/lib/aegis/errors";
 import { AEGIS_METHODS } from "../src/lib/aegis/contract-schema";
+import { aegisKeys } from "../src/lib/aegis/query-keys";
 import {
   isDailySettlementProcessable,
   settlementAvailabilityMessage,
@@ -135,6 +136,19 @@ describe("Bradbury configuration", () => {
     expect(Object.values(AEGIS_METHODS)).not.toContain(
       ["finalize", "expired", "protection"].join("_"),
     );
+  });
+
+  it("scopes contract query data by chain and deployment address", () => {
+    const scope = ["aegis", BRADBURY_CHAIN_ID, AEGIS_PROTECTION_ADDRESS.toLowerCase()];
+    expect(aegisKeys.scope).toEqual(scope);
+    expect(aegisKeys.dashboard(ACCOUNT)).toEqual([...scope, "dashboard", ACCOUNT.toLowerCase()]);
+    expect(aegisKeys.owned(ACCOUNT)).toEqual([
+      ...scope,
+      "owned-protections",
+      ACCOUNT.toLowerCase(),
+      0,
+    ]);
+    expect(aegisKeys.dashboard(ACCOUNT)).not.toEqual(["aegis", "dashboard", ACCOUNT.toLowerCase()]);
   });
 });
 
@@ -782,8 +796,18 @@ describe("route states and production data", () => {
     const dashboard = await source("../src/routes/dashboard.tsx");
     expect(dashboard).toContain("Connect your wallet to view your protections.");
     expect(dashboard).toContain("No protections found for this wallet.");
-    expect(dashboard).toContain("count.data === 0n");
+    expect(dashboard).toContain("currentCount === 0n");
     expect(dashboard).toContain("remaining > 50n ? 50n : remaining");
+  });
+
+  it("does not render cached dashboard values after a current read fails", async () => {
+    const dashboard = await source("../src/routes/dashboard.tsx");
+    expect(dashboard).toContain(
+      "const currentSummary = summary.isError ? undefined : summary.data",
+    );
+    expect(dashboard).toContain("const currentCount = count.isError ? undefined : count.data");
+    expect(dashboard).toContain("protections.isError ? []");
+    expect(dashboard).toContain("currentCount !== undefined && !protections.isError");
   });
 
   it("keeps internal protection IDs out of ordinary product copy", async () => {
@@ -829,7 +853,7 @@ describe("route states and production data", () => {
     expect(panel).toContain("ZERO_ADDRESS");
     expect(writes).toContain("aegisKeys.operatorCount");
     expect(writes).toContain("aegisKeys.operators");
-    expect(writes).toContain('["aegis", "settlement-authorization"]');
+    expect(writes).toContain("aegisKeys.settlementAuthorizationRoot");
   });
 
   it("contains no production mock service or fabricated transaction timer", async () => {

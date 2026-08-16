@@ -71,7 +71,10 @@ function Dashboard() {
       return count.data && loaded < count.data ? loaded : undefined;
     },
   });
-  const allProtections = useMemo(() => protections.data?.pages.flat() ?? [], [protections.data]);
+  const allProtections = useMemo(
+    () => (protections.isError ? [] : (protections.data?.pages.flat() ?? [])),
+    [protections.data, protections.isError],
+  );
   const detailQueries = useQueries({
     queries: allProtections.map((item) => ({
       queryKey: aegisKeys.details(item.id),
@@ -111,6 +114,8 @@ function Dashboard() {
   );
   const error =
     summary.error ?? count.error ?? protections.error ?? detailQueries.find((q) => q.error)?.error;
+  const currentSummary = summary.isError ? undefined : summary.data;
+  const currentCount = count.isError ? undefined : count.data;
 
   return (
     <>
@@ -147,12 +152,12 @@ function Dashboard() {
             <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3 lg:grid-cols-5">
               <Metric
                 label="Total"
-                value={summary.data?.total_protections}
+                value={currentSummary?.total_protections}
                 loading={summary.isLoading}
               />
               <Metric
                 label="Active"
-                value={summary.data?.active_count}
+                value={currentSummary?.active_count}
                 loading={summary.isLoading}
               />
               <Metric
@@ -162,40 +167,40 @@ function Dashboard() {
               />
               <Metric
                 label="Claimable"
-                value={summary.data?.claimable_count}
+                value={currentSummary?.claimable_count}
                 loading={summary.isLoading}
               />
               <Metric
                 label="Expired"
-                value={summary.data?.expired_count}
+                value={currentSummary?.expired_count}
                 loading={summary.isLoading}
               />
               <Metric
                 label="Claimed"
-                value={summary.data?.claimed_count}
+                value={currentSummary?.claimed_count}
                 loading={summary.isLoading}
               />
               <Metric
                 label="Premiums paid"
-                value={summary.data?.total_premiums_paid}
+                value={currentSummary?.total_premiums_paid}
                 loading={summary.isLoading}
                 money
               />
               <Metric
                 label="Claimable payout"
-                value={summary.data?.total_claimable_payout}
+                value={currentSummary?.total_claimable_payout}
                 loading={summary.isLoading}
                 money
               />
               <Metric
                 label="Payouts received"
-                value={summary.data?.total_payouts_received}
+                value={currentSummary?.total_payouts_received}
                 loading={summary.isLoading}
                 money
               />
             </dl>
 
-            {count.data === 0n ? (
+            {currentCount === 0n ? (
               <div className="surface-card mt-8 flex flex-col items-center px-6 py-16 text-center">
                 <h3 className="display text-2xl">No protections found for this wallet.</h3>
                 <Button asChild className="mt-6">
@@ -207,7 +212,7 @@ function Dashboard() {
                   </Link>
                 </Button>
               </div>
-            ) : (
+            ) : currentCount !== undefined && !protections.isError ? (
               <>
                 <div className="mt-10 overflow-x-auto">
                   <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
@@ -257,7 +262,7 @@ function Dashboard() {
                   </div>
                 ) : null}
               </>
-            )}
+            ) : null}
           </>
         )}
       </div>
